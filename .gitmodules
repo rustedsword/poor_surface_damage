@@ -1,0 +1,3 @@
+[submodule "subprojects/poor_base"]
+	path = subprojects/poor_base
+	url = https://github.com/rustedsword/poor_base.git

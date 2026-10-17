@@ -1,0 +1,7 @@
+*.swp
+*.log
+*~
+cscope.out
+ctags
+/subprojects/.wraplock
+/build*/
