@@ -16,7 +16,7 @@ damage_dep = declare_dependency(
 pkgconfig.generate(
 	damage,
 	name: 'poor_surface_damage',
-	description: 'Damage tracking for Wayland surfaces',
+	description: 'Damage tracking without allocations',
 	version: meson.project_version(),
 	filebase: 'poor_surface_damage',
 	requires: [ 'poor_base' ]
