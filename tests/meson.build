@@ -20,6 +20,8 @@ test_runner_dep = declare_dependency(
 	]
 )
 
-foreach test_name : [ 'region-test', 'buffers-test' ]
+foreach test_name : [ 'region-test', 'buffers-test', 'history-test', 'tiles-test' ]
 	test(test_name, executable(test_name, test_name + '.c', dependencies: [ test_runner_dep, damage_dep ]))
 endforeach
+
+test('sim-test', executable('sim-test', 'sim-test.c', dependencies: [ test_runner_dep, harness_dep ]))

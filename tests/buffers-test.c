@@ -6,33 +6,73 @@
 #include "poor_surface_damage.h"
 #include "test-runner.h"
 
-static bool is(const struct poor_damage_region *region, int32_t x, int32_t y, int32_t width, int32_t height)
+poor_damage_region_declare(region, 4);
+poor_damage_buffers_declare(triple, 3, 4);
+poor_damage_buffers_declare(boxes, 8, 1);
+
+#define is(region, ...) is_impl((region)->count, arrview_first((region)->count, (region)->rects), __VA_ARGS__)
+
+static bool is_impl(size_t count, const struct poor_damage_rect (*rects)[count], int32_t x, int32_t y, int32_t width,
+		    int32_t height)
 {
-	return region->count == 1 && region->rects[0].x == x && region->rects[0].y == y && region->rects[0].width == width &&
-	       region->rects[0].height == height;
+	return count == 1 && (*rects)[0].x == x && (*rects)[0].y == y && (*rects)[0].width == width &&
+	       (*rects)[0].height == height;
 }
 
-static struct poor_damage_region damage_of(int32_t x, int32_t y, int32_t width, int32_t height)
+static region damage_of(int32_t x, int32_t y, int32_t width, int32_t height)
 {
-	struct poor_damage_region region = POOR_DAMAGE_REGION_INIT;
+	region damage = POOR_DAMAGE_REGION_INIT;
 
-	poor_damage_region_add(&region, (struct poor_damage_rect){ x, y, width, height });
-	return region;
+	poor_damage_region_add(&damage, (struct poor_damage_rect){ x, y, width, height });
+	return damage;
 }
 
 TEST(buffers_lack_what_was_drawn_since_their_frame)
 {
-	struct poor_damage_region buffers[3], first = damage_of(0, 0, 10, 10), second = damage_of(100, 100, 10, 10);
-	struct poor_damage_region third = damage_of(0, 50, 10, 10);
+	region first = damage_of(0, 0, 10, 10), second = damage_of(100, 100, 10, 10), third = damage_of(0, 50, 10, 10);
+	region lacks;
+	triple buffers;
 
-	foreach_array_ref(buffers, buffer)
-		poor_damage_region_whole(buffer, 640, 480);
-	poor_damage_drawn(buffers, 0, &first);
-	assert(!buffers[0].count && is(&buffers[1], 0, 0, 640, 480) && is(&buffers[2], 0, 0, 640, 480));
-	poor_damage_drawn(buffers, 1, &second);
-	assert(is(&buffers[0], 100, 100, 10, 10) && !buffers[1].count && is(&buffers[2], 0, 0, 640, 480));
-	poor_damage_drawn(buffers, 0, &third);
-	assert(!buffers[0].count && buffers[1].count == 1 && is(&buffers[1], 0, 50, 10, 10));
-	poor_damage_drawn(buffers, 2, &second);
-	assert(buffers[0].count == 1 && buffers[1].count == 2 && !buffers[2].count);
+	poor_damage_buffers_init(&buffers, 640, 480);
+	assert(poor_damage_buffers_drawn(&buffers, 0, &first) == 1);
+	poor_damage_buffers_lacks(&buffers, 0, &lacks);
+	assert(!lacks.count);
+	poor_damage_buffers_lacks(&buffers, 1, &lacks);
+	assert(is(&lacks, 0, 0, 640, 480));
+	poor_damage_buffers_drawn(&buffers, 1, &second);
+	poor_damage_buffers_lacks(&buffers, 0, &lacks);
+	assert(is(&lacks, 100, 100, 10, 10));
+	poor_damage_buffers_drawn(&buffers, 0, &third);
+	poor_damage_buffers_lacks(&buffers, 1, &lacks);
+	assert(is(&lacks, 0, 50, 10, 10));
+	poor_damage_buffers_drawn(&buffers, 2, &second);
+	poor_damage_buffers_lacks(&buffers, 1, &lacks);
+	assert(lacks.count == 2);
+}
+
+TEST(a_forgotten_buffer_lacks_everything)
+{
+	region damage = damage_of(0, 0, 10, 10), lacks;
+	triple buffers;
+
+	poor_damage_buffers_init(&buffers, 640, 480);
+	poor_damage_buffers_drawn(&buffers, 1, &damage);
+	poor_damage_buffers_forget(&buffers, 1);
+	poor_damage_buffers_lacks(&buffers, 1, &lacks);
+	assert(is(&lacks, 0, 0, 640, 480));
+}
+
+TEST(buffers_of_one_rect_lack_bounding_boxes)
+{
+	region left = damage_of(0, 0, 10, 10), right = damage_of(100, 0, 10, 10), lacks;
+	boxes buffers;
+
+	poor_damage_buffers_init(&buffers, 640, 480);
+	foreach_array_index(buffers.counts, i)
+		poor_damage_buffers_drawn(&buffers, i, &left);
+	poor_damage_buffers_drawn(&buffers, 7, &right);
+	poor_damage_buffers_lacks(&buffers, 0, &lacks);
+	assert(is(&lacks, 0, 0, 110, 10));
+	poor_damage_buffers_lacks(&buffers, 7, &lacks);
+	assert(!lacks.count);
 }

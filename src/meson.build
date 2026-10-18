@@ -1,6 +1,7 @@
 damage = library(
 	'poor_surface_damage',
-	sources: [ 'damage.c' ],
+	sources: [ 'region.c', 'buffers.c', 'history.c', 'tiles.c' ],
+	include_directories: inc,
 	version: meson.project_version(),
 	soversion: '0',
 	dependencies: poor_base_dep,
@@ -9,7 +10,7 @@ damage = library(
 
 damage_dep = declare_dependency(
 	link_with: damage,
-	include_directories: include_directories('.'),
+	include_directories: inc,
 	dependencies: poor_base_dep,
 )
 
@@ -24,4 +25,11 @@ pkgconfig.generate(
 
 meson.override_dependency('poor_surface_damage', damage_dep)
 
-install_headers('poor_surface_damage.h')
+install_headers(
+	'../include/poor_surface_damage.h',
+	'../include/poor_damage_region.h',
+	'../include/poor_damage_surface.h',
+	'../include/poor_damage_buffers.h',
+	'../include/poor_damage_history.h',
+	'../include/poor_damage_tiles.h',
+)

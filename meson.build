@@ -47,8 +47,11 @@ configure_file(
 poor_base_dep = dependency('poor_base')
 
 root_inc = include_directories('.')
+inc = include_directories('include')
 
 subdir('src')
+subdir('harness')
+subdir('examples')
 
 if get_option('tests')
 	subdir('tests')
