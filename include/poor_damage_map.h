@@ -14,60 +14,87 @@ extern "C" {
 /*
  * Poor Damage Map.
  *
- * Damage drawn into a raster of cells over the surface, the way rendering draws into a texture, except that cells hold
- * the number of the frame that last changed them rather than colors. A buffer that holds any frame lacks the cells of
- * later frames.
+ * Draws damage into a low resolution image of the surface.
  *
- * The raster is the application's buffer: an array of uint64_t, one per cell, in one of its structs, where it can share
- * memory with anything else. The map lives in the same struct and finds its buffer there, the way a list finds its
- * items from their links in poor_list.h, so its type is declared before that struct, and the buffer attached after it:
+ * Think of it as rendering into a texture, except that each cell stores the number of the last frame that changed it
+ * instead of a color. To find out what a buffer is missing, look for the cells that changed after the frame it holds.
+ * Since only the latest frame is kept per cell, this works for buffers of any age, for any number of buffers, and even
+ * for things that aren't buffers at all, like a screen recorder that last saw frame N.
  *
+ * The cells live in your own array of uint64_t, which has to be a member of the same struct as the map. The map finds
+ * the array by its offset in that struct, the same way poor_list.h finds items from their links. So declare the map
+ * type before the struct, and attach the array after it:
+ *
+ *   poor_damage_region_declare(damage_region, 4);
  *   poor_damage_map_declare(screen_map);
  *
  *   struct screen {
  *           screen_map map;
- *           uint64_t damage[2304];
+ *           uint64_t cells[2304];
  *   };
  *
- *   poor_damage_map_attach_buffer(screen_map, struct screen, map, damage);
+ *   poor_damage_map_attach_buffer(screen_map, struct screen, map, cells);
  *
  *   struct screen screen;
- *   uint64_t holds[3] = {};
+ *   damage_region damage, repair;
+ *   uint64_t holds[3] = {};  // the frame that each buffer holds, 0 for none
  *
  *   poor_damage_map_init(&screen.map, width, height, 64, 64);
- *   ...
+ *
+ *   // Then, for each frame:
+ *
+ *   // fill 'repair' with the cells that changed since buffer 'index' was last drawn into
  *   poor_damage_map_lacks(&screen.map, holds[index], &repair);
+ *
+ *   // add the damage of this frame to 'repair'
  *   poor_damage_region_add_region(&repair, &damage);
- *   ... redraw 'repair' into buffer 'index' ...
+ *
+ *   ... redraw 'repair' into buffer 'index', then present it with 'damage' ...
+ *
+ *   // draw the damage of this frame into the map, and remember which frame buffer 'index' holds now
  *   holds[index] = poor_damage_map_drawn(&screen.map, &damage);
  *
- * The buffer is only a budget of cells, and init shapes it after the surface. Cells are of the size that init asks
- * for, or of its least multiple with which they fit the budget: 2304 cells of 64 pixels cover 1920 x 1080 in 30 x 17,
- * and 8000 x 500 in 125 x 8, while 1500 x 15000 gets 12 x 118 cells of 128 pixels. Cells are never larger than the
- * surface. A buffer of arrays is a budget of all their cells. Smaller cells follow the damage closer, but take more
- * memory and more time to tell what a buffer lacks, which grow with the cells, not with buffers or frames.
+ * The array is just a budget of cells, and init picks the layout that fits the surface. Cells get the size passed to
+ * init, or are scaled up by the same factor in both directions until they fit into the budget. For example, 2304 cells
+ * of 64 pixels cover 1920 x 1080 as 30 x 17 cells, and 8000 x 500 as 125 x 8 cells, while 1500 x 15000 needs bigger
+ * cells: 12 x 118 cells of 128 pixels. Cells never get bigger than the surface. A two-dimensional array works too, and
+ * simply counts as all of its cells.
+ *
+ * Smaller cells follow the damage more closely, but take more memory and more time to search. Both depend only on the
+ * number of cells, not on the number of buffers or frames.
  */
+
+/* The layout of the cells, chosen by poor_damage_map_init(). */
 struct poor_damage_grid {
 	int32_t cell_width, cell_height;
 	size_t columns, rows;
 };
 
-/* Declares map type 'name' before the struct where maps of it live */
+/* Declare a map type 'name'. Do this before the struct that holds the map and its cells. */
 #define poor_damage_map_declare(name) h_damage_map_declare(name, h_damage_map_cat(h_damage_map_meta_, name))
 
-/* Attaches 'member' of 'type' as the buffer of maps of type 'name' at 'path' in the same 'type' */
+/*
+ * Tell maps of type 'name' where their cells are: the map is the member 'path' of 'type', and its cells are the member
+ * 'member' of the same struct, an array of uint64_t.
+ */
 #define poor_damage_map_attach_buffer(name, type, path, member) \
 	h_damage_map_attach_buffer(name, h_damage_map_cat(h_damage_map_meta_, name), type, path, member)
 
-/* No frames drawn yet on 'width' x 'height', in cells of 'cell_width' x 'cell_height' or of a multiple of both */
+/*
+ * Initialize the map for a 'width' x 'height' surface, with cells of 'cell_width' x 'cell_height' pixels, or bigger if
+ * they don't fit into the budget otherwise. No frames are drawn yet.
+ */
 #define poor_damage_map_init(map, width, height, cell_width, cell_height) \
 	poor_damage_map_init_impl(h_damage_map(map), width, height, cell_width, cell_height)
 
-/* Sets 'region' to what a buffer that holds 'frame' lacks */
+/*
+ * Set 'region' to the cells that changed after 'frame', which is what a buffer holding 'frame' has missed. If 'frame'
+ * is 0, 'region' is set to the whole surface.
+ */
 #define poor_damage_map_lacks(map, frame, region) \
 	poor_damage_map_lacks_impl(h_damage_map(map), frame, h_damage_region(region))
 
-/* A frame with 'damage' was drawn. Returns its number. */
+/* Call this after a frame with 'damage' was drawn. Returns the number of the frame. */
 #define poor_damage_map_drawn(map, ...) poor_damage_map_drawn_impl(h_damage_map(map), h_damage_rects((__VA_ARGS__)))
 
 void
@@ -89,8 +116,10 @@ poor_damage_map_drawn_impl(struct poor_damage_surface *surface, const struct poo
 #define h_damage_map_cat(a, ...) h_damage_map_primitive_cat(a, __VA_ARGS__)
 #define h_damage_map_primitive_cat(a, ...) a ## __VA_ARGS__
 
-/* The meta struct is never made: its members only tell where maps and their buffers are in their struct, and the cells
- * of buffers */
+/*
+ * The meta struct is never instantiated. Its members only record, in their types, where the map and its cells are in
+ * the struct, and how many cells there are.
+ */
 #define h_damage_map_declare(name, meta) \
 	struct meta; \
 	typedef union name { \

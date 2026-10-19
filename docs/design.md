@@ -56,10 +56,10 @@ poor_damage_map_declare(screen_map);
 
 struct screen {
 	screen_map map;
-	uint64_t damage[2304];                           /* a raster of 2304 cells */
+	uint64_t cells[2304];                            /* a budget of 2304 cells */
 };
 
-poor_damage_map_attach_buffer(screen_map, struct screen, map, damage);
+poor_damage_map_attach_buffer(screen_map, struct screen, map, cells);
 ```
 
 - The macros take the capacities from the array sizes, with poor_base's `ARRAY_SIZE`.
@@ -199,9 +199,9 @@ Cell size trades precision for time (3 buffers, 640×480, a budget of 16384 cell
 | beam racing, one buffer that is presented and kept | only a region: repair = damage | 72 |
 | desktop window, triple buffering | `poor_damage_buffers_declare(t, 3, 4)` | 232 |
 | EGL with buffer age | `poor_damage_history_declare(h, 4, 4)` (ages up to 5) | 304 |
-| 4K output, consumers asking "since frame N" | a map over `uint64_t damage[2304]`, 64 px cells | 18472 |
-| text editor stretched in VR, 1500×15000 | a map over `uint64_t damage[5760]`, 64 px cells | 46120 |
-| SQL result of many columns, 8000×500 | a map over `uint64_t damage[1024]`, 64 px cells | 8232 |
+| 4K output, consumers asking "since frame N" | a map over `uint64_t cells[2304]`, 64 px cells | 18472 |
+| text editor stretched in VR, 1500×15000 | a map over `uint64_t cells[5760]`, 64 px cells | 46120 |
+| SQL result of many columns, 8000×500 | a map over `uint64_t cells[1024]`, 64 px cells | 8232 |
 
 Huge surfaces with few, local changes also suit `buffers` with 8–16 rects. It costs a few hundred bytes and repairs
 exactly, at the price of merging rects when the damage scatters.

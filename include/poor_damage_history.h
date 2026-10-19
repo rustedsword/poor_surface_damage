@@ -12,33 +12,56 @@ extern "C" {
 /*
  * Poor Damage History.
  *
- * The damage of the last 'frames' frames, in up to 'capacity' rects each, for a buffer that holds one of them. It needs
- * no index of buffers, only the frame that a buffer holds, or its age as EGL_EXT_buffer_age counts it. A buffer that
- * holds an older frame lacks everything:
+ * Remembers the damage of the last few frames.
  *
+ * This is the classic way to use EGL_EXT_buffer_age. The age of a buffer tells how many frames ago it was drawn into,
+ * so it is missing the damage of every frame drawn since then. The history keeps the damage of the last 'frames'
+ * frames, up to 'capacity' rects each. It doesn't need to know which buffer is which: the age of a buffer, or the
+ * frame it holds, is enough. A buffer that is older than the history has to be redrawn completely.
+ *
+ * Example that remembers 4 frames of up to 8 rects each:
+ *
+ *   poor_damage_region_declare(damage_region, 8);
  *   poor_damage_history_declare(frame_damage, 4, 8);
  *
  *   frame_damage history = POOR_DAMAGE_HISTORY_INIT(width, height);
- *   ...
+ *   damage_region damage, repair;
+ *   EGLint age;
+ *
+ *   // Then, for each frame:
+ *
+ *   // fill 'repair' with the damage of all frames drawn since the back buffer was last drawn into
+ *   eglQuerySurface(display, surface, EGL_BUFFER_AGE_EXT, &age);
  *   poor_damage_history_lacks(&history, poor_damage_frame_of_age(&history, age), &repair);
+ *
+ *   // add the damage of this frame to 'repair'
  *   poor_damage_region_add_region(&repair, &damage);
- *   ... redraw 'repair' ...
+ *
+ *   ... redraw 'repair', then swap buffers with 'damage' ...
+ *
+ *   // remember the damage of this frame
  *   poor_damage_history_drawn(&history, &damage);
  *
- * Memory grows with frames and rects, and so does the time to tell what an old buffer lacks.
+ * Memory usage grows with the number of frames and rects, and so does the time it takes to work out what an old
+ * buffer is missing.
  */
+
+/* Declare a history type 'name' that remembers the last 'frames' frames, up to 'capacity' rects each. */
 #define poor_damage_history_declare(name, frames, capacity) h_damage_history_declare(name, frames, capacity)
 
 #define POOR_DAMAGE_HISTORY_INIT(width, height) { .surface = POOR_DAMAGE_SURFACE_INIT(width, height) }
 
-/* No frames drawn yet on 'width' x 'height' */
+/* Initialize the history for a 'width' x 'height' surface, with no frames drawn yet. */
 #define poor_damage_history_init(history, width, height) h_damage_surface_init(&(history)->surface, width, height)
 
-/* Sets 'region' to what a buffer that holds 'frame' lacks, everything when the history doesn't reach back to it */
+/*
+ * Set 'region' to the damage that a buffer holding 'frame' has missed. If 'frame' is 0 or older than the history,
+ * 'region' is set to the whole surface.
+ */
 #define poor_damage_history_lacks(history, frame, region) \
 	poor_damage_history_lacks_impl(h_damage_history(history), frame, h_damage_region(region))
 
-/* A frame with 'damage' was drawn. Returns its number. */
+/* Call this after a frame with 'damage' was drawn. Returns the number of the frame. */
 #define poor_damage_history_drawn(history, ...) \
 	poor_damage_history_drawn_impl(h_damage_history(history), h_damage_rects((__VA_ARGS__)))
 

@@ -3,14 +3,14 @@
 #define POOR_SURFACE_DAMAGE_H
 
 /*
- * libpoor_surface_damage tracks what changes on a surface without allocations: each type is declared with the
- * capacities that the application needs, and lives wherever the application puts it. A map works over a raster that
- * the application holds in its own structs.
+ * libpoor_surface_damage keeps track of damage: which parts of a surface changed, and which parts each buffer still
+ * has to redraw. It never allocates memory: you declare each type with the capacities you need, and put it wherever
+ * you like.
  *
- *  - poor_damage_region.h: damage in a few rects,
- *  - poor_damage_buffers.h: what each buffer of a swapchain lacks,
- *  - poor_damage_history.h: the damage of the last frames, for a buffer that holds one of them,
- *  - poor_damage_map.h: a raster of the last frame that changed each cell, for a buffer that holds any frame.
+ *  - poor_damage_region.h: a set of damaged rects with a fixed capacity
+ *  - poor_damage_buffers.h: the damage that each buffer of a swapchain is missing
+ *  - poor_damage_history.h: the damage of the last few frames, for use with EGL_EXT_buffer_age
+ *  - poor_damage_map.h: a low resolution image of the frames that changed each cell, for buffers of any age
  */
 
 #include "poor_damage_region.h"
