@@ -44,14 +44,15 @@ TEST(trackers_redraw_what_buffers_lack)
 TEST(any_capacities_redraw_what_buffers_lack)
 {
 	static const struct tracker_options trackers[] = {
-		{ TRACKER_BUFFERS, .rects = 1, .frames = 1, .columns = 1, .rows = 1, .cell_width = 1, .cell_height = 1 },
-		{ TRACKER_BUFFERS, .rects = 64, .frames = 1, .columns = 1, .rows = 1, .cell_width = 1, .cell_height = 1 },
-		{ TRACKER_HISTORY, .rects = 1, .frames = 1, .columns = 1, .rows = 1, .cell_width = 1, .cell_height = 1 },
-		{ TRACKER_HISTORY, .rects = 16, .frames = 2, .columns = 1, .rows = 1, .cell_width = 1, .cell_height = 1 },
-		{ TRACKER_HISTORY, .rects = 3, .frames = 64, .columns = 1, .rows = 1, .cell_width = 1, .cell_height = 1 },
-		{ TRACKER_MAP, .rects = 2, .frames = 1, .columns = 1, .rows = 1, .cell_width = 1, .cell_height = 1 },
-		{ TRACKER_MAP, .rects = 8, .frames = 1, .columns = 3, .rows = 50, .cell_width = 7, .cell_height = 2 },
-		{ TRACKER_MAP, .rects = 32, .frames = 1, .columns = 128, .rows = 128, .cell_width = 1, .cell_height = 1 },
+		{ TRACKER_BUFFERS, .rects = 1, .frames = 1, .cells = 1, .cell_width = 1, .cell_height = 1 },
+		{ TRACKER_BUFFERS, .rects = 64, .frames = 1, .cells = 1, .cell_width = 1, .cell_height = 1 },
+		{ TRACKER_HISTORY, .rects = 1, .frames = 1, .cells = 1, .cell_width = 1, .cell_height = 1 },
+		{ TRACKER_HISTORY, .rects = 16, .frames = 2, .cells = 1, .cell_width = 1, .cell_height = 1 },
+		{ TRACKER_HISTORY, .rects = 3, .frames = 64, .cells = 1, .cell_width = 1, .cell_height = 1 },
+		{ TRACKER_MAP, .rects = 2, .frames = 1, .cells = 1, .cell_width = 1, .cell_height = 1 },
+		{ TRACKER_MAP, .rects = 8, .frames = 1, .cells = 150, .cell_width = 7, .cell_height = 2 },
+		{ TRACKER_MAP, .rects = 32, .frames = 1, .cells = 16384, .cell_width = 1, .cell_height = 1 },
+		{ TRACKER_MAP, .rects = 4, .frames = 1, .cells = 3, .cell_width = 64, .cell_height = 1 },
 	};
 	struct sim_result result;
 

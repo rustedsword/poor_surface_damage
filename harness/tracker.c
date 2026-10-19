@@ -17,9 +17,7 @@ static const char *const names[] = {
 	make_arrview_first(name##_all, (regions) * (tracker)->options.rects, (tracker)->rects);			\
 	make_arrview_dim(name, (tracker)->options.rects, name##_all)
 
-#define make_changed(name, tracker)										\
-	make_arrview_first(name##_all, (tracker)->options.rows * (tracker)->options.columns, (tracker)->changed);	\
-	make_arrview_dim(name, (tracker)->options.columns, name##_all)
+#define changed_of(tracker) arrview_first((tracker)->options.cells, (tracker)->changed)
 
 #define rects_of(region) (region)->count, arrview_first((region)->count, (region)->rects)
 
@@ -28,7 +26,7 @@ void tracker_init(struct tracker *tracker, const struct tracker_options *options
 {
 	assert(buffers && buffers <= TRACKER_MAX_BUFFERS && options->rects && options->rects <= REGION_RECTS);
 	assert(options->frames && options->frames <= TRACKER_MAX_FRAMES);
-	assert(options->columns && options->rows && options->columns * options->rows <= TRACKER_MAX_CELLS);
+	assert(options->cells && options->cells <= TRACKER_MAX_CELLS);
 	tracker->options = *options;
 	tracker->buffers = buffers;
 	tracker->surface = (struct poor_damage_surface)POOR_DAMAGE_SURFACE_INIT(width, height);
@@ -39,12 +37,9 @@ void tracker_init(struct tracker *tracker, const struct tracker_options *options
 
 		poor_damage_buffers_init_impl(&tracker->surface, buffers, options->rects, kept_counts, kept, width, height);
 	}
-	if (options->kind == TRACKER_MAP) {
-		make_changed(changed, tracker);
-
-		poor_damage_map_init_impl(&tracker->surface, &tracker->grid, options->rows, options->columns, changed, width,
+	if (options->kind == TRACKER_MAP)
+		poor_damage_map_init_impl(&tracker->surface, &tracker->grid, options->cells, changed_of(tracker), width,
 					  height, options->cell_width, options->cell_height);
-	}
 }
 
 void tracker_limit(const struct tracker *tracker, region *damage)
@@ -84,13 +79,10 @@ void tracker_repair(const struct tracker *tracker, size_t index, const region *d
 					       &repair->count);
 		break;
 	}
-	case TRACKER_MAP: {
-		make_changed(changed, tracker);
-
-		poor_damage_map_lacks_impl(&tracker->surface, &tracker->grid, tracker->options.rows, tracker->options.columns,
-					   changed, tracker->holds[index], rects, out, &repair->count);
+	case TRACKER_MAP:
+		poor_damage_map_lacks_impl(&tracker->surface, &tracker->grid, tracker->options.cells, changed_of(tracker),
+					   tracker->holds[index], rects, out, &repair->count);
 		break;
-	}
 	}
 	poor_damage_region_add_rects_impl(rects, out, &repair->count, rects_of(damage));
 }
@@ -116,13 +108,10 @@ void tracker_drawn(struct tracker *tracker, size_t index, const region *damage)
 					       kept_counts, kept, rects_of(damage));
 		break;
 	}
-	case TRACKER_MAP: {
-		make_changed(changed, tracker);
-
-		tracker->holds[index] = poor_damage_map_drawn_impl(&tracker->surface, &tracker->grid, tracker->options.rows,
-								   tracker->options.columns, changed, rects_of(damage));
+	case TRACKER_MAP:
+		tracker->holds[index] = poor_damage_map_drawn_impl(&tracker->surface, &tracker->grid, tracker->options.cells,
+								   changed_of(tracker), rects_of(damage));
 		break;
-	}
 	}
 }
 
@@ -145,10 +134,10 @@ bool tracker_option(struct tracker_options *options, int option, const char *val
 	case TRACKER_OPTION_HISTORY:
 		options->frames = strtoul(value, nullptr, 10);
 		return options->frames && options->frames <= TRACKER_MAX_FRAMES;
-	case TRACKER_OPTION_GRID:
-		return sscanf(value, "%zux%zu", &options->columns, &options->rows) == 2 && options->columns &&
-		       options->rows && options->columns * options->rows <= TRACKER_MAX_CELLS;
-	case TRACKER_OPTION_CELL:
+	case TRACKER_OPTION_CELLS:
+		options->cells = strtoul(value, nullptr, 10);
+		return options->cells && options->cells <= TRACKER_MAX_CELLS;
+	case TRACKER_OPTION_CELL_SIZE:
 		return sscanf(value, "%dx%d", &options->cell_width, &options->cell_height) == 2 && options->cell_width > 0 &&
 		       options->cell_height > 0;
 	}

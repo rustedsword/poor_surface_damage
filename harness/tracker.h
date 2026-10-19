@@ -29,13 +29,13 @@ enum tracker_kind {
 
 struct tracker_options {
 	enum tracker_kind kind;
-	/* Rects of each region, frames of the history, the cells of the map, and their least size */
-	size_t rects, frames, columns, rows;
+	/* Rects of each region, frames of the history, cells of the map, and their least size */
+	size_t rects, frames, cells;
 	int32_t cell_width, cell_height;
 };
 
 #define TRACKER_OPTIONS_INIT \
-	{ .kind = TRACKER_BUFFERS, .rects = 4, .frames = 8, .columns = 64, .rows = 64, .cell_width = 16, .cell_height = 16 }
+	{ .kind = TRACKER_BUFFERS, .rects = 4, .frames = 8, .cells = 4096, .cell_width = 16, .cell_height = 16 }
 
 struct tracker {
 	struct tracker_options options;
@@ -54,23 +54,23 @@ enum tracker_option {
 	TRACKER_OPTION_KIND = 0x100,
 	TRACKER_OPTION_RECTS,
 	TRACKER_OPTION_HISTORY,
-	TRACKER_OPTION_GRID,
-	TRACKER_OPTION_CELL,
+	TRACKER_OPTION_CELLS,
+	TRACKER_OPTION_CELL_SIZE,
 };
 
 #define TRACKER_LONG_OPTIONS \
 	{ "tracker", required_argument, nullptr, TRACKER_OPTION_KIND }, \
 	{ "rects", required_argument, nullptr, TRACKER_OPTION_RECTS }, \
 	{ "history", required_argument, nullptr, TRACKER_OPTION_HISTORY }, \
-	{ "grid", required_argument, nullptr, TRACKER_OPTION_GRID }, \
-	{ "cell", required_argument, nullptr, TRACKER_OPTION_CELL }
+	{ "cells", required_argument, nullptr, TRACKER_OPTION_CELLS }, \
+	{ "cell-size", required_argument, nullptr, TRACKER_OPTION_CELL_SIZE }
 
 #define TRACKER_USAGE \
 	"  --tracker T   whole, naive, buffers, history or map, buffers by default\n" \
 	"  --rects N     rects of each region, 4 by default, up to 64\n" \
 	"  --history N   frames of the history, 8 by default, up to 64\n" \
-	"  --grid CxR    columns and rows of cells of the map, 64x64 by default, up to 16384 cells\n" \
-	"  --cell WxH    the least size of cells, 16x16 by default\n"
+	"  --cells N     cells of the map, 4096 by default, up to 16384\n" \
+	"  --cell-size WxH  the least size of cells, 16x16 by default\n"
 
 /* Takes the value of an option of TRACKER_LONG_OPTIONS, returns false when it's wrong */
 bool

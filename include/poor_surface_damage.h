@@ -4,7 +4,8 @@
 
 /*
  * libpoor_surface_damage tracks what changes on a surface without allocations: each type is declared with the
- * capacities that the application needs, and lives wherever the application puts it.
+ * capacities that the application needs, and lives wherever the application puts it. A map works over a raster that
+ * the application holds in its own structs.
  *
  *  - poor_damage_region.h: damage in a few rects,
  *  - poor_damage_buffers.h: what each buffer of a swapchain lacks,

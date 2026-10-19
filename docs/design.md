@@ -43,13 +43,23 @@ One header and one source per module, following poor_loop:
 ## Capacities belong to the application
 
 Nothing has a fixed size. Each type is declared with the capacities the application needs, like poor_loop's groups,
-and lives wherever the application puts it: on the stack, in a static, or inside its own structs.
+and lives wherever the application puts it: on the stack, in a static, or inside its own structs. The map doesn't even
+hold its raster: the raster is an array in one of the application's structs, where it can share memory with anything
+else, and the map lives in the same struct and finds it there, like a list finds its items from their links in
+poor_list.
 
 ```c
 poor_damage_region_declare(damage_region, 4);           /* up to 4 rects */
 poor_damage_buffers_declare(swapchain_damage, 3, 4);    /* 3 buffers, 4 rects each */
 poor_damage_history_declare(frame_damage, 8, 4);        /* 8 frames, 4 rects each */
-poor_damage_map_declare(screen_map, 64, 36);            /* a raster of up to 64 x 36 cells */
+poor_damage_map_declare(screen_map);
+
+struct screen {
+	screen_map map;
+	uint64_t damage[2304];                           /* a raster of 2304 cells */
+};
+
+poor_damage_map_attach_buffer(screen_map, struct screen, map, damage);
 ```
 
 - The macros take the capacities from the array sizes, with poor_base's `ARRAY_SIZE`.
@@ -57,13 +67,16 @@ poor_damage_map_declare(screen_map, 64, 36);            /* a raster of up to 64 
 - Regions of different capacities mix freely. A tracker can store 4 rects per buffer and answer into a repair region of
   16 rects.
 - Capacities that are only known at run time use the `_impl` functions directly, with `arrview` views of storage sized
-  for the largest case. The harness does this: `--rects`, `--history`, `--grid` and `--cell` pick capacities per run.
+  for the largest case. The harness does this: `--rects`, `--history`, `--cells` and `--cell-size` pick capacities per run.
 - Trailing macro arguments are variadic, so `poor_damage_region_add(&r, (struct poor_damage_rect){ x, y, w, h })` works.
 - The macros may evaluate the tracker or region argument more than once.
 - Following AGENTS.md:
   - `POOR_DAMAGE_REGION_INIT` and `POOR_DAMAGE_HISTORY_INIT(w, h)` set only what is required.
   - The init functions do the same.
   - Buffers and the map only have init functions, since their initial state depends on capacities.
+- Attaching a buffer checks at compile time that the map member is of its type and that the buffer is an array of
+  `uint64_t`, or of arrays of them. A map finds its buffer by the offsets of both in the struct, so it holds no
+  pointer, and it only works inside that struct.
 
 ## Region
 
@@ -151,32 +164,33 @@ that last changed them rather than colors. "What changed since frame N" is then 
 - It works for any N, any buffer order and any number of buffers.
 - It also serves consumers that are not buffers at all, such as a screencast or VNC client that last saw frame N.
 - Keeping only the latest frame per cell is what lets it reach back forever in fixed memory.
-- The raster is declared with up to C × R cells. `init` asks for a least cell size, and cells grow by its multiples when
-  the raster can't cover the surface otherwise: 64×36 cells of 64 pixels cover 4096×2304, and an 8K surface gets cells
-  of 128.
+- The raster is only a budget of cells, and `init` shapes it after the surface. It asks for a least cell size, and
+  cells grow by a common multiple of it until they fit the budget. 2304 cells of 64 pixels cover 1920×1080 in 30×17
+  and 8000×500 in 125×8, while 1500×15000 gets 12×118 cells of 128. A shape fixed at compile time would instead waste
+  most cells on wide or tall surfaces.
 - One cell per pixel would be exact. Larger cells are only a trade of precision for memory and time.
 - Rows that changed the same cells merge into bands before they become rects.
 - Answers are whole cells.
 
 ```c
-screen_map map;
+struct screen screen;
 uint64_t holds[3] = {};                                  /* the frame each buffer holds */
 
-poor_damage_map_init(&map, width, height, 64, 64);
+poor_damage_map_init(&screen.map, width, height, 64, 64);
 ...
-poor_damage_map_lacks(&map, holds[index], &repair);
+poor_damage_map_lacks(&screen.map, holds[index], &repair);
 poor_damage_region_add_region(&repair, &damage);
 /* redraw repair */
-holds[index] = poor_damage_map_drawn(&map, &damage);
+holds[index] = poor_damage_map_drawn(&screen.map, &damage);
 ```
 
-Cell size trades precision for time (3 buffers, 640×480, raster of up to 128×128):
+Cell size trades precision for time (3 buffers, 640×480, a budget of 16384 cells):
 
 | Least cell | 1 px | 8 px | 16 px | 32 px | 64 px |
 |---|---|---|---|---|---|
 | redrawn | 8.2% | 8.7% | 9.8% | 13.1% | 22.7% |
-| ÷ exact union | 1.25 | 1.33 | 1.50 | 2.01 | 3.48 |
-| µs per frame | 15.1 | 5.9 | 2.5 | 1.3 | 0.9 |
+| ÷ exact union | 1.26 | 1.33 | 1.50 | 2.01 | 3.48 |
+| µs per frame | 13.1 | 5.8 | 2.3 | 1.3 | 0.9 |
 
 ### Sizing for a use case
 
@@ -185,9 +199,9 @@ Cell size trades precision for time (3 buffers, 640×480, raster of up to 128×1
 | beam racing, one buffer that is presented and kept | only a region: repair = damage | 72 |
 | desktop window, triple buffering | `poor_damage_buffers_declare(t, 3, 4)` | 232 |
 | EGL with buffer age | `poor_damage_history_declare(h, 4, 4)` (ages up to 5) | 304 |
-| 4K output, consumers asking "since frame N" | `poor_damage_map_declare(m, 64, 36)`, 64 px cells | 18472 |
-| text editor stretched in VR, 1500×15000 | `poor_damage_map_declare(m, 24, 240)`, 64 px cells | 46120 |
-| SQL result of many columns, 8000×500 | `poor_damage_map_declare(m, 128, 8)`, 64 px cells | 8232 |
+| 4K output, consumers asking "since frame N" | a map over `uint64_t damage[2304]`, 64 px cells | 18472 |
+| text editor stretched in VR, 1500×15000 | a map over `uint64_t damage[5760]`, 64 px cells | 46120 |
+| SQL result of many columns, 8000×500 | a map over `uint64_t damage[1024]`, 64 px cells | 8232 |
 
 Huge surfaces with few, local changes also suit `buffers` with 8–16 rects. It costs a few hundred bytes and repairs
 exactly, at the price of merging rects when the damage scatters.
@@ -235,7 +249,7 @@ checks:
 - `naive` is caught with 2 buffers and is right with 1,
 - more rects redraw less.
 
-The extreme capacities include 1-rect regions, a 1-frame history, 1×1 and 128×128 rasters, and 7×2 cells.
+The extreme capacities include 1-rect regions, a 1-frame history, maps of 1 and 16384 cells, and 7×2 cells.
 
 `damage-sim` prints the whole comparison and takes the capacity options. The default run is 640×480 over 2000 frames.
 The table below uses 3 buffers. *redrawn* is the share of pixels that were redrawn. */exact* compares the repair with
@@ -257,7 +271,7 @@ trackers.
 ## Examples
 
 Both examples are built when Vulkan, wayland-client, wayland-protocols, wayland-scanner and glslc are found
-(`-Dexamples=auto`). Both take the harness's `--tracker`, `--rects`, `--history`, `--grid` and `--cell` options.
+(`-Dexamples=auto`). Both take the harness's `--tracker`, `--rects`, `--history`, `--cells` and `--cell-size` options.
 
 ### vk-damage
 
