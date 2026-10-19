@@ -45,7 +45,7 @@ executable('shm-damage', [ 'shm-damage.c' ] + xdg_shell, dependencies: [ harness
 
 if get_option('tests')
 	foreach target : [ 'offscreen', 'headless' ]
-		foreach tracker : [ 'buffers', 'history', 'tiles' ]
+		foreach tracker : [ 'buffers', 'history', 'map' ]
 			test(
 				'vk-damage-@0@-@1@'.format(target, tracker),
 				vk_damage,

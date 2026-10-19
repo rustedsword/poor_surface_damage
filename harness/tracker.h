@@ -14,7 +14,7 @@
 
 constexpr size_t TRACKER_MAX_BUFFERS = 8;
 constexpr size_t TRACKER_MAX_FRAMES = 64;
-constexpr size_t TRACKER_MAX_TILES = 128 * 128;
+constexpr size_t TRACKER_MAX_CELLS = 128 * 128;
 
 enum tracker_kind {
 	/* Redraws everything */
@@ -24,18 +24,18 @@ enum tracker_kind {
 	TRACKER_BUFFERS,
 	/* With ages of buffers as EGL_EXT_buffer_age counts them */
 	TRACKER_HISTORY,
-	TRACKER_TILES,
+	TRACKER_MAP,
 };
 
 struct tracker_options {
 	enum tracker_kind kind;
-	/* Rects of each region, frames of the history, the grid of tiles, and the least size of tiles */
+	/* Rects of each region, frames of the history, the cells of the map, and their least size */
 	size_t rects, frames, columns, rows;
-	int32_t tile_width, tile_height;
+	int32_t cell_width, cell_height;
 };
 
 #define TRACKER_OPTIONS_INIT \
-	{ .kind = TRACKER_BUFFERS, .rects = 4, .frames = 8, .columns = 64, .rows = 64, .tile_width = 16, .tile_height = 16 }
+	{ .kind = TRACKER_BUFFERS, .rects = 4, .frames = 8, .columns = 64, .rows = 64, .cell_width = 16, .cell_height = 16 }
 
 struct tracker {
 	struct tracker_options options;
@@ -44,7 +44,7 @@ struct tracker {
 	struct poor_damage_grid grid;
 	size_t counts[TRACKER_MAX_FRAMES];
 	struct poor_damage_rect rects[TRACKER_MAX_FRAMES * REGION_RECTS];
-	uint64_t changed[TRACKER_MAX_TILES];
+	uint64_t changed[TRACKER_MAX_CELLS];
 	uint32_t ages[TRACKER_MAX_BUFFERS];
 	uint64_t holds[TRACKER_MAX_BUFFERS];
 };
@@ -55,7 +55,7 @@ enum tracker_option {
 	TRACKER_OPTION_RECTS,
 	TRACKER_OPTION_HISTORY,
 	TRACKER_OPTION_GRID,
-	TRACKER_OPTION_TILE,
+	TRACKER_OPTION_CELL,
 };
 
 #define TRACKER_LONG_OPTIONS \
@@ -63,14 +63,14 @@ enum tracker_option {
 	{ "rects", required_argument, nullptr, TRACKER_OPTION_RECTS }, \
 	{ "history", required_argument, nullptr, TRACKER_OPTION_HISTORY }, \
 	{ "grid", required_argument, nullptr, TRACKER_OPTION_GRID }, \
-	{ "tile", required_argument, nullptr, TRACKER_OPTION_TILE }
+	{ "cell", required_argument, nullptr, TRACKER_OPTION_CELL }
 
 #define TRACKER_USAGE \
-	"  --tracker T   whole, naive, buffers, history or tiles, buffers by default\n" \
+	"  --tracker T   whole, naive, buffers, history or map, buffers by default\n" \
 	"  --rects N     rects of each region, 4 by default, up to 64\n" \
 	"  --history N   frames of the history, 8 by default, up to 64\n" \
-	"  --grid CxR    the grid of tiles, 64x64 by default, up to 16384 tiles\n" \
-	"  --tile WxH    the least size of tiles, 16x16 by default\n"
+	"  --grid CxR    columns and rows of cells of the map, 64x64 by default, up to 16384 cells\n" \
+	"  --cell WxH    the least size of cells, 16x16 by default\n"
 
 /* Takes the value of an option of TRACKER_LONG_OPTIONS, returns false when it's wrong */
 bool

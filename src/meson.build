@@ -1,6 +1,6 @@
 damage = library(
 	'poor_surface_damage',
-	sources: [ 'region.c', 'buffers.c', 'history.c', 'tiles.c' ],
+	sources: [ 'region.c', 'buffers.c', 'history.c', 'map.c' ],
 	include_directories: inc,
 	version: meson.project_version(),
 	soversion: '0',
@@ -31,5 +31,5 @@ install_headers(
 	'../include/poor_damage_surface.h',
 	'../include/poor_damage_buffers.h',
 	'../include/poor_damage_history.h',
-	'../include/poor_damage_tiles.h',
+	'../include/poor_damage_map.h',
 )

@@ -5,7 +5,7 @@ lacks, so that only that is redrawn. Three trackers tell what a buffer lacks:
 
 - buffers: each buffer holds the damage of the frames that were drawn since its own,
 - history: the damage of the last frames, for a buffer of a known EGL age,
-- tiles: the last frame that changed each tile of a grid, for a buffer that holds any frame.
+- map: a raster of the last frame that changed each cell, for a buffer that holds any frame.
 
 Every type is declared with the capacities that the application needs, and lives wherever it puts it:
 
@@ -36,5 +36,5 @@ submodule. The examples also need Vulkan, wayland-client, wayland-protocols and 
     $ ninja -C build/
     $ meson test -C build/                              # --no-suite vulkan without a Vulkan device
     $ build/harness/damage-sim --rects 8                # compares the trackers
-    $ build/examples/vk-damage --tracker tiles --flash  # a Vulkan window that tints what it redraws
+    $ build/examples/vk-damage --tracker map --flash    # a Vulkan window that tints what it redraws
     $ build/examples/shm-damage --copy --verify         # a wl_shm window that copies what a buffer lacks

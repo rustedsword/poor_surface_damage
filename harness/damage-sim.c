@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 	struct sim_options options = {
 		.tracker = TRACKER_OPTIONS_INIT, .width = 640, .height = 480, .frames = 2000, .resize = 0, .seed = 1,
 	};
-	enum tracker_kind first = TRACKER_WHOLE, last = TRACKER_TILES;
+	enum tracker_kind first = TRACKER_WHOLE, last = TRACKER_MAP;
 	struct sim_result result;
 	bool known = true;
 	int option;

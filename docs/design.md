@@ -37,7 +37,7 @@ One header and one source per module, following poor_loop:
 | `poor_damage_surface.h` | — | size and frame counter shared by trackers, EGL ages |
 | `poor_damage_buffers.h` | `buffers.c` | what each buffer lacks |
 | `poor_damage_history.h` | `history.c` | damage of the last frames |
-| `poor_damage_tiles.h` | `tiles.c` | last frame that changed each tile |
+| `poor_damage_map.h` | `map.c` | raster of the last frame that changed each cell |
 | `poor_surface_damage.h` | — | includes all of them |
 
 ## Capacities belong to the application
@@ -49,7 +49,7 @@ and lives wherever the application puts it: on the stack, in a static, or inside
 poor_damage_region_declare(damage_region, 4);           /* up to 4 rects */
 poor_damage_buffers_declare(swapchain_damage, 3, 4);    /* 3 buffers, 4 rects each */
 poor_damage_history_declare(frame_damage, 8, 4);        /* 8 frames, 4 rects each */
-poor_damage_tiles_declare(screen_tiles, 64, 36);        /* a grid of up to 64 x 36 tiles */
+poor_damage_map_declare(screen_map, 64, 36);            /* a raster of up to 64 x 36 cells */
 ```
 
 - The macros take the capacities from the array sizes, with poor_base's `ARRAY_SIZE`.
@@ -57,13 +57,13 @@ poor_damage_tiles_declare(screen_tiles, 64, 36);        /* a grid of up to 64 x 
 - Regions of different capacities mix freely. A tracker can store 4 rects per buffer and answer into a repair region of
   16 rects.
 - Capacities that are only known at run time use the `_impl` functions directly, with `arrview` views of storage sized
-  for the largest case. The harness does this: `--rects`, `--history`, `--grid` and `--tile` pick capacities per run.
+  for the largest case. The harness does this: `--rects`, `--history`, `--grid` and `--cell` pick capacities per run.
 - Trailing macro arguments are variadic, so `poor_damage_region_add(&r, (struct poor_damage_rect){ x, y, w, h })` works.
 - The macros may evaluate the tracker or region argument more than once.
 - Following AGENTS.md:
   - `POOR_DAMAGE_REGION_INIT` and `POOR_DAMAGE_HISTORY_INIT(w, h)` set only what is required.
   - The init functions do the same.
-  - Buffers and tiles only have init functions, since their initial state depends on capacities.
+  - Buffers and the map only have init functions, since their initial state depends on capacities.
 
 ## Region
 
@@ -96,7 +96,7 @@ All three answer "what does buffer *i* lack". They differ in what they remember 
 |---|---|---|---|---|
 | buffers | a region per buffer | union into every other buffer, O(buffers) | copy one region | forever, any order |
 | history | a region per frame | store one region | union of age−1 regions | its frames, then everything |
-| tiles | the last frame that changed each tile | stamp tiles | scan the grid | forever, any order |
+| map | the last frame that changed each cell | stamp cells | scan the raster | forever, any order |
 
 ### buffers
 
@@ -144,31 +144,35 @@ matters:
 | 3 buffers: redrawn, frames redrawn whole | 23.8%, 20.2% | 14.5%, 9.9% | 11.2%, 6.2% | 9.1%, 3.6% | 7.7% |
 | 4 buffers | 48.9%, 46.2% | 21.8%, 16.6% | 12.7%, 5.9% | 10.9%, 3.7% | 9.6% |
 
-### tiles
+### map
 
-Every tile remembers the last frame that changed it, so "what changed since frame N" is a scan for stamps above N.
+Damage is drawn into a raster the way rendering draws into a texture, except that cells hold the number of the frame
+that last changed them rather than colors. "What changed since frame N" is then every cell above N.
 - It works for any N, any buffer order and any number of buffers.
 - It also serves consumers that are not buffers at all, such as a screencast or VNC client that last saw frame N.
-- The grid is declared with up to C × R tiles. `init` asks for a least tile size, and tiles grow by its multiples when the
-  grid can't cover the surface otherwise: 64×36 tiles of 64 pixels cover 4096×2304, and an 8K surface gets tiles of 128.
-- Rows that changed the same tiles merge into bands before they become rects.
-- Answers are whole tiles.
+- Keeping only the latest frame per cell is what lets it reach back forever in fixed memory.
+- The raster is declared with up to C × R cells. `init` asks for a least cell size, and cells grow by its multiples when
+  the raster can't cover the surface otherwise: 64×36 cells of 64 pixels cover 4096×2304, and an 8K surface gets cells
+  of 128.
+- One cell per pixel would be exact. Larger cells are only a trade of precision for memory and time.
+- Rows that changed the same cells merge into bands before they become rects.
+- Answers are whole cells.
 
 ```c
-screen_tiles tiles;
+screen_map map;
 uint64_t holds[3] = {};                                  /* the frame each buffer holds */
 
-poor_damage_tiles_init(&tiles, width, height, 64, 64);
+poor_damage_map_init(&map, width, height, 64, 64);
 ...
-poor_damage_tiles_lacks(&tiles, holds[index], &repair);
+poor_damage_map_lacks(&map, holds[index], &repair);
 poor_damage_region_add_region(&repair, &damage);
 /* redraw repair */
-holds[index] = poor_damage_tiles_drawn(&tiles, &damage);
+holds[index] = poor_damage_map_drawn(&map, &damage);
 ```
 
-Tile size trades precision for time (3 buffers, 640×480, grid of up to 128×128):
+Cell size trades precision for time (3 buffers, 640×480, raster of up to 128×128):
 
-| Least tile | 1 px | 8 px | 16 px | 32 px | 64 px |
+| Least cell | 1 px | 8 px | 16 px | 32 px | 64 px |
 |---|---|---|---|---|---|
 | redrawn | 8.2% | 8.7% | 9.8% | 13.1% | 22.7% |
 | ÷ exact union | 1.25 | 1.33 | 1.50 | 2.01 | 3.48 |
@@ -181,9 +185,9 @@ Tile size trades precision for time (3 buffers, 640×480, grid of up to 128×128
 | beam racing, one buffer that is presented and kept | only a region: repair = damage | 72 |
 | desktop window, triple buffering | `poor_damage_buffers_declare(t, 3, 4)` | 232 |
 | EGL with buffer age | `poor_damage_history_declare(h, 4, 4)` (ages up to 5) | 304 |
-| 4K output, consumers asking "since frame N" | `poor_damage_tiles_declare(t, 64, 36)`, 64 px tiles | 18472 |
-| text editor stretched in VR, 1500×15000 | `poor_damage_tiles_declare(t, 24, 240)`, 64 px tiles | 46120 |
-| SQL result of many columns, 8000×500 | `poor_damage_tiles_declare(t, 128, 8)`, 64 px tiles | 8232 |
+| 4K output, consumers asking "since frame N" | `poor_damage_map_declare(m, 64, 36)`, 64 px cells | 18472 |
+| text editor stretched in VR, 1500×15000 | `poor_damage_map_declare(m, 24, 240)`, 64 px cells | 46120 |
+| SQL result of many columns, 8000×500 | `poor_damage_map_declare(m, 128, 8)`, 64 px cells | 8232 |
 
 Huge surfaces with few, local changes also suit `buffers` with 8–16 rects. It costs a few hundred bytes and repairs
 exactly, at the price of merging rects when the damage scatters.
@@ -193,7 +197,7 @@ exactly, at the price of merging rects when the damage scatters.
 On resize, or a new swapchain or pool:
 
 - `buffers`: init again, or `forget()` the buffers that changed.
-- `history` and `tiles`: init again, and set every buffer's frame back to 0.
+- `history` and `map`: init again, and set every buffer's frame back to 0.
 - The first frame damages everything. The presentation engine has nothing yet, and Mutter even redraws the first 3
   frames whole because of junk from drivers.
 
@@ -201,7 +205,7 @@ On resize, or a new swapchain or pool:
 
 - **The buffer is known** (Vulkan, wl_shm, GBM): `buffers`. It is simplest and exact for any order and any age.
 - **Only an EGL age is known**: `history`, as long as the age stays within its frames.
-- **Consumers ask "since frame N" for arbitrary N, or there are many buffers**: `tiles`.
+- **Consumers ask "since frame N" for arbitrary N, or there are many buffers**: `map`.
 - **Picking the buffer yourself** (wl_shm, EGL on Mesa): take the free buffer that was presented last. In the
   simulation, the freshest-first order (`newest`) of 4 buffers redraws 5.5% of the pixels against 9.2% for FIFO.
   `shm-damage` on KWin shows the same: 5.3% against 8.8%. Mesa's EGL and Qt pick buffers this way.
@@ -231,7 +235,7 @@ checks:
 - `naive` is caught with 2 buffers and is right with 1,
 - more rects redraw less.
 
-The extreme capacities include 1-rect regions, a 1-frame history, 1×1 and 128×128 grids, and 7×2 tiles.
+The extreme capacities include 1-rect regions, a 1-frame history, 1×1 and 128×128 rasters, and 7×2 cells.
 
 `damage-sim` prints the whole comparison and takes the capacity options. The default run is 640×480 over 2000 frames.
 The table below uses 3 buffers. *redrawn* is the share of pixels that were redrawn. */exact* compares the repair with
@@ -243,7 +247,7 @@ the exact union of the damage that the buffer lacked. *µs* is the time the trac
 | naive | wrong | wrong | wrong | — | — | 0.2 |
 | buffers | 7.34% | 5.53% | 7.22% | 1.4% | 1.16 | 0.6–0.7 |
 | history | 7.34% | 5.53% | 10.74% | 6.1% | 1.16 | 0.5–0.7 |
-| tiles | 9.36% | 7.33% | 8.50% | 1.4% | 1.48 | 2.2–2.4 |
+| map | 9.36% | 7.33% | 8.50% | 1.4% | 1.48 | 2.2–2.4 |
 
 With 1 buffer every tracker redraws 3.55%, exactly the frame damage. With 4 buffers in random order, `history` redraws
 12.3% against 9.0% for `buffers`, because old buffers fall back to whole redraws. The repair is about 3–4 times the
@@ -253,7 +257,7 @@ trackers.
 ## Examples
 
 Both examples are built when Vulkan, wayland-client, wayland-protocols, wayland-scanner and glslc are found
-(`-Dexamples=auto`). Both take the harness's `--tracker`, `--rects`, `--history`, `--grid` and `--tile` options.
+(`-Dexamples=auto`). Both take the harness's `--tracker`, `--rects`, `--history`, `--grid` and `--cell` options.
 
 ### vk-damage
 
@@ -283,7 +287,7 @@ Useful options:
 
 `meson test --suite vulkan` runs offscreen and headless verification with resizes for every tracker. The results:
 
-| Run | buffers | history | tiles |
+| Run | buffers | history | map |
 |---|---|---|---|
 | KWin window, RADV, 4 images, FIFO, 240 frames | 8.82%, 0 wrong | 8.82%, 0 wrong | 11.54%, 0 wrong |
 | Mesa headless WSI, 5 images, 300 frames | 12.81%, 10 whole | 18.38%, 35 whole | 15.69%, 10 whole |
@@ -304,6 +308,18 @@ other order), and sends the frame damage with `wl_surface.damage_buffer`.
 - `--verify` compares every frame with one drawn whole.
 
 ## Ideas not done
+
+- Resolution for every tracker. Cell size isn't specific to the map. It is one way to store damage, next to rects with
+  a budget, and either way works with any bookkeeping:
+
+  | Kept | Rects (rect budget) | Raster (cell size) |
+  |---|---|---|
+  | per buffer | `buffers` | a bitmap per buffer, 1 bit per cell, where union is OR |
+  | per frame | `history` | a bitmap per frame |
+  | per place, latest frame | rects carrying the frame that last changed them, where a merge keeps the newer frame | `map` |
+
+  The cheapest step is a cell size on regions that snaps rects as they are added. Snapping saves little memory, but
+  makes rects merge more often and keeps scissors aligned.
 
 - An exact banded region with a larger cap, for the damage sent to compositors, which take any number of rects.
   wlroots caps at 20 and Gecko at 8.

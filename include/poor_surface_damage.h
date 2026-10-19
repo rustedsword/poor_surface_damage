@@ -9,13 +9,13 @@
  *  - poor_damage_region.h: damage in a few rects,
  *  - poor_damage_buffers.h: what each buffer of a swapchain lacks,
  *  - poor_damage_history.h: the damage of the last frames, for a buffer that holds one of them,
- *  - poor_damage_tiles.h: the last frame that changed each tile of a grid, for a buffer that holds any frame.
+ *  - poor_damage_map.h: a raster of the last frame that changed each cell, for a buffer that holds any frame.
  */
 
 #include "poor_damage_region.h"
 #include "poor_damage_surface.h"
 #include "poor_damage_buffers.h"
 #include "poor_damage_history.h"
-#include "poor_damage_tiles.h"
+#include "poor_damage_map.h"
 
 #endif
