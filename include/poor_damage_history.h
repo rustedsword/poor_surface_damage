@@ -52,50 +52,20 @@ extern "C" {
 #define POOR_DAMAGE_HISTORY_INIT(width, height) { .surface = POOR_DAMAGE_SURFACE_INIT(width, height) }
 
 /* Initialize the history for a 'width' x 'height' surface, with no frames drawn yet. */
-#define poor_damage_history_init(history, width, height) h_damage_surface_init(&(history)->surface, width, height)
+#define poor_damage_history_init(history, width, height) poor_damage_surface_init(&(history)->surface, width, height)
 
 /*
  * Set 'region' to the damage that a buffer holding 'frame' has missed. If 'frame' is 0 or older than the history,
  * 'region' is set to the whole surface.
  */
 #define poor_damage_history_lacks(history, frame, region) \
-	poor_damage_history_lacks_impl(h_damage_history(history), frame, h_damage_region(region))
+	poor_damage_history_lacks_impl(h_damage_history(history), frame, ARRAY_SIZE((region)->rects), \
+				       &(region)->rects, &(region)->count)
 
 /* Call this after a frame with 'damage' was drawn. Returns the number of the frame. */
 #define poor_damage_history_drawn(history, ...) \
-	poor_damage_history_drawn_impl(h_damage_history(history), h_damage_rects((__VA_ARGS__)))
-
-static inline void
-poor_damage_history_lacks_impl(const struct poor_damage_surface *surface, size_t frames, size_t capacity,
-			       const size_t (*counts)[frames], const struct poor_damage_rect (*rects)[frames][capacity],
-			       uint64_t frame, size_t region_capacity, struct poor_damage_rect (*region)[region_capacity],
-			       size_t *region_count)
-{
-	assert(frame <= surface->frame);
-	if (!frame || surface->frame - frame > frames) {
-		poor_damage_region_whole_impl(region_capacity, region, region_count, surface->width, surface->height);
-		return;
-	}
-	*region_count = 0;
-	while (frame++ < surface->frame) {
-		size_t slot = (size_t)(frame % frames);
-
-		poor_damage_region_add_rects_impl(region_capacity, region, region_count, (*counts)[slot],
-						  arrview_first((*counts)[slot], (*rects)[slot]));
-	}
-}
-
-static inline uint64_t
-poor_damage_history_drawn_impl(struct poor_damage_surface *surface, size_t frames, size_t capacity,
-			       size_t (*counts)[frames], struct poor_damage_rect (*rects)[frames][capacity],
-			       size_t damages, const struct poor_damage_rect (*damage)[damages])
-{
-	size_t slot = (size_t)(++surface->frame % frames);
-
-	(*counts)[slot] = 0;
-	poor_damage_region_add_rects_impl(capacity, &(*rects)[slot], &(*counts)[slot], damages, damage);
-	return surface->frame;
-}
+	poor_damage_history_drawn_impl(h_damage_history(history), (__VA_ARGS__)->count, \
+				       arrview_first((__VA_ARGS__)->count, (__VA_ARGS__)->rects))
 
 /* Implementation details, subject to change. */
 
@@ -109,6 +79,37 @@ poor_damage_history_drawn_impl(struct poor_damage_surface *surface, size_t frame
 #define h_damage_history(history) \
 	&(history)->surface, ARRAY_SIZE((history)->counts), ARRAY_SIZE((history)->rects[0]), &(history)->counts, \
 		&(history)->rects
+
+static inline void
+poor_damage_history_lacks_impl(const struct poor_damage_surface *surface, size_t frames, size_t capacity,
+			       const size_t (*counts)[frames], const struct poor_damage_rect (*rects)[frames][capacity],
+			       uint64_t frame, size_t region_capacity, struct poor_damage_rect (*region)[region_capacity],
+			       size_t *region_count)
+{
+	assert(frame <= surface->frame);
+	if (!frame || surface->frame - frame > frames) {
+		poor_damage_rects_whole(region, region_count, surface->width, surface->height);
+		return;
+	}
+	*region_count = 0;
+	while (frame++ < surface->frame) {
+		size_t slot = (size_t)(frame % frames);
+
+		poor_damage_rects_add_rects(region, region_count, arrview_first((*counts)[slot], (*rects)[slot]));
+	}
+}
+
+static inline uint64_t
+poor_damage_history_drawn_impl(struct poor_damage_surface *surface, size_t frames, size_t capacity,
+			       size_t (*counts)[frames], struct poor_damage_rect (*rects)[frames][capacity],
+			       size_t damages, const struct poor_damage_rect (*damage)[damages])
+{
+	size_t slot = (size_t)(++surface->frame % frames);
+
+	(*counts)[slot] = 0;
+	poor_damage_rects_add_rects((*rects)[slot], &(*counts)[slot], damage);
+	return surface->frame;
+}
 
 #ifdef __cplusplus
 }

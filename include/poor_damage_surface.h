@@ -22,6 +22,9 @@ struct poor_damage_surface {
 
 #define POOR_DAMAGE_SURFACE_INIT(w, h) { .width = (w), .height = (h), .frame = 0 }
 
+/* Initialize 'surface' for a 'width' x 'height' surface, with no frames drawn yet. */
+static inline void poor_damage_surface_init(struct poor_damage_surface *surface, int32_t width, int32_t height);
+
 /*
  * Convert a buffer age, as returned by EGL_EXT_buffer_age, into the number of the frame that the buffer holds. An age
  * of 1 means the buffer holds the last frame drawn by 'tracker'. Returns 0 if the age is 0, which means the contents
@@ -31,7 +34,7 @@ struct poor_damage_surface {
 
 /* Implementation details, subject to change. */
 
-static inline void h_damage_surface_init(struct poor_damage_surface *surface, int32_t width, int32_t height)
+static inline void poor_damage_surface_init(struct poor_damage_surface *surface, int32_t width, int32_t height)
 {
 	assert(width > 0 && height > 0);
 	surface->width = width;

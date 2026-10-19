@@ -48,7 +48,7 @@ void tracker_limit(const struct tracker *tracker, region *damage)
 	make_arrview_first(limited, tracker->options.rects, damage->rects);
 
 	damage->count = 0;
-	poor_damage_region_add_rects_impl(tracker->options.rects, limited, &damage->count, rects_of(&all));
+	poor_damage_rects_add_rects(limited, &damage->count, arrview_first(all.count, all.rects));
 }
 
 void tracker_repair(const struct tracker *tracker, size_t index, const region *damage, region *repair)
@@ -59,7 +59,7 @@ void tracker_repair(const struct tracker *tracker, size_t index, const region *d
 	assert(index < tracker->buffers);
 	switch (tracker->options.kind) {
 	case TRACKER_WHOLE:
-		poor_damage_region_whole_impl(rects, out, &repair->count, tracker->surface.width, tracker->surface.height);
+		poor_damage_rects_whole(out, &repair->count, tracker->surface.width, tracker->surface.height);
 		return;
 	case TRACKER_NAIVE:
 		repair->count = 0;
@@ -67,8 +67,8 @@ void tracker_repair(const struct tracker *tracker, size_t index, const region *d
 	case TRACKER_BUFFERS: {
 		make_kept(kept, tracker, tracker->buffers);
 
-		poor_damage_buffers_lacks_impl(&tracker->surface, tracker->buffers, rects, kept_counts, kept, index, rects,
-					       out, &repair->count);
+		poor_damage_buffers_lacks_impl(tracker->buffers, rects, kept_counts, kept, index, rects, out,
+					       &repair->count);
 		break;
 	}
 	case TRACKER_HISTORY: {
@@ -84,7 +84,7 @@ void tracker_repair(const struct tracker *tracker, size_t index, const region *d
 					   tracker->holds[index], rects, out, &repair->count);
 		break;
 	}
-	poor_damage_region_add_rects_impl(rects, out, &repair->count, rects_of(damage));
+	poor_damage_rects_add_rects(out, &repair->count, arrview_first(damage->count, damage->rects));
 }
 
 void tracker_drawn(struct tracker *tracker, size_t index, const region *damage)

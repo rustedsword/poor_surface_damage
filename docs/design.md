@@ -29,59 +29,6 @@ drawn(buffer, damage)
 present(buffer, damage)             // the frame damage, not the repair
 ```
 
-## Layout
-
-One header per module, like poor_loop. Small functions are inline in the headers, and so are all asserts: they follow
-the `NDEBUG` of the application, not the one the library was built with. Only the modules with real work to do have a
-source file:
-
-| Header | Source | Contents |
-|---|---|---|
-| `poor_damage_region.h` | `region.c` | rects and regions |
-| `poor_damage_surface.h` | — | surface size and frame counter shared by the trackers, buffer ages |
-| `poor_damage_buffers.h` | — | the damage that each buffer is missing |
-| `poor_damage_history.h` | — | the damage of the last few frames |
-| `poor_damage_map.h` | `map.c` | a low resolution image of the frame that last changed each cell |
-| `poor_surface_damage.h` | — | includes all of the above |
-
-## The application decides the capacities
-
-Nothing has a fixed size. You declare each type with the capacities you need, the same way poor_loop declares its
-groups, and put it anywhere: on the stack, in a static variable, or inside your own structs. The map doesn't even own
-its cells: they are an array in one of your structs, where they can share memory with anything else. The map lives in
-the same struct and finds the array there, just like poor_list finds items from their links.
-
-```c
-poor_damage_region_declare(damage_region, 4);           /* up to 4 rects */
-poor_damage_buffers_declare(swapchain_damage, 3, 4);    /* 3 buffers, up to 4 rects each */
-poor_damage_history_declare(frame_damage, 8, 4);        /* 8 frames, up to 4 rects each */
-poor_damage_map_declare(screen_map);
-
-struct screen {
-	screen_map map;
-	uint64_t cells[2304];                            /* a budget of 2304 cells */
-};
-
-poor_damage_map_attach_buffer(screen_map, struct screen, map, cells);
-```
-
-- The macros take the capacities from the array sizes with poor_base's `ARRAY_SIZE`, and pass the arrays to the
-  `_impl` functions as pointers to variable length arrays.
-- Regions of different capacities can be mixed. A tracker can keep 4 rects per buffer and still fill a repair region
-  of 16 rects.
-- If the capacities are only known at runtime, call the `_impl` functions directly with `arrview` views of storage
-  that is big enough for the largest case. The harness does this, which is how `--rects`, `--history`, `--cells` and
-  `--cell-size` choose capacities per run.
-- The last argument of the macros is variadic, so `poor_damage_region_add(&r, (struct poor_damage_rect){ x, y, w, h })`
-  works.
-- The macros may evaluate the tracker or region argument more than once.
-- As AGENTS.md asks, `POOR_DAMAGE_REGION_INIT`, `POOR_DAMAGE_HISTORY_INIT(w, h)` and the init functions set only the
-  fields that need it. Buffers and maps only have init functions, because their initial state depends on the
-  capacities.
-- `poor_damage_map_attach_buffer()` checks at compile time that the map member has the right type and that the cells
-  are an array of `uint64_t`, or an array of arrays of them. The map finds its cells by their offset in the struct, so
-  it holds no pointer, but it only works inside that struct.
-
 ## Region
 
 A region holds a limited number of rects:

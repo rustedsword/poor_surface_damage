@@ -38,8 +38,8 @@ struct poor_damage_rect {
  *   foreach_array_const_ref(arrview_first(damage.count, damage.rects), rect)
  *           ... redraw *rect ...
  *
- * Regions of different capacities can be mixed freely. The macros below may evaluate their region arguments more
- * than once. If the capacity is only known at runtime, call the _impl functions directly with views of your arrays.
+ * Regions of different capacities can be mixed freely. The macros below may evaluate their region and array arguments
+ * more than once.
  */
 
 /* Declare a region type 'name' that holds up to 'capacity' rects. */
@@ -51,53 +51,34 @@ struct poor_damage_rect {
 #define poor_damage_region_init(region) ((void)((region)->count = 0))
 
 /* Add a rect to 'region'. Rects with zero or negative width or height are ignored. */
-#define poor_damage_region_add(region, ...) poor_damage_region_add_impl(h_damage_region(region), __VA_ARGS__)
+#define poor_damage_region_add(region, ...) poor_damage_rects_add((region)->rects, &(region)->count, __VA_ARGS__)
 
 /* Add all rects of another region to 'region'. */
 #define poor_damage_region_add_region(region, ...) \
-	poor_damage_region_add_rects_impl(h_damage_region(region), h_damage_rects((__VA_ARGS__)))
+	poor_damage_rects_add_rects((region)->rects, &(region)->count, \
+				    arrview_first((__VA_ARGS__)->count, (__VA_ARGS__)->rects))
 
 /* Set 'region' to the whole 'width' x 'height' surface, e.g. for a buffer that was never drawn into. */
 #define poor_damage_region_whole(region, width, height) \
-	poor_damage_region_whole_impl(h_damage_region(region), width, height)
+	poor_damage_rects_whole((region)->rects, &(region)->count, width, height)
 
 /* Clip 'region' to the 'width' x 'height' surface, dropping rects that end up empty. */
 #define poor_damage_region_clip(region, width, height) \
-	poor_damage_region_clip_impl(h_damage_region(region), width, height)
+	poor_damage_rects_clip((region)->rects, &(region)->count, width, height)
 
-void
-h_damage_region_add(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
-		    struct poor_damage_rect rect);
-
-static inline void
-poor_damage_region_add_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
-			    struct poor_damage_rect rect)
-{
-	assert(capacity && *count <= capacity);
-	if (rect.width > 0 && rect.height > 0)
-		h_damage_region_add(capacity, rects, count, rect);
-}
-
-static inline void
-poor_damage_region_add_rects_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
-				  size_t others, const struct poor_damage_rect (*other)[others])
-{
-	foreach_array_const_ref(other, rect)
-		poor_damage_region_add_impl(capacity, rects, count, *rect);
-}
-
-static inline void
-poor_damage_region_whole_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
-			      int32_t width, int32_t height)
-{
-	assert(capacity && width > 0 && height > 0);
-	(*rects)[0] = (struct poor_damage_rect){ 0, 0, width, height };
-	*count = 1;
-}
-
-void
-poor_damage_region_clip_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
-			     int32_t width, int32_t height);
+/*
+ * The same for rects kept anywhere else: 'rects' is an array of rects, or a pointer to one, and 'count' points to the
+ * number of them in use. poor_damage_rects_add_rects() adds all rects of the array 'other'.
+ */
+#define poor_damage_rects_add(rects, count, ...) \
+	poor_damage_rects_add_impl(ARRAY_SIZE(rects), &auto_arr(rects), count, __VA_ARGS__)
+#define poor_damage_rects_add_rects(rects, count, other) \
+	poor_damage_rects_add_rects_impl(ARRAY_SIZE(rects), &auto_arr(rects), count, ARRAY_SIZE(other), \
+					 &auto_arr(other))
+#define poor_damage_rects_whole(rects, count, width, height) \
+	poor_damage_rects_whole_impl(ARRAY_SIZE(rects), &auto_arr(rects), count, width, height)
+#define poor_damage_rects_clip(rects, count, width, height) \
+	poor_damage_rects_clip_impl(ARRAY_SIZE(rects), &auto_arr(rects), count, width, height)
 
 /* Implementation details, subject to change. */
 
@@ -107,8 +88,30 @@ poor_damage_region_clip_impl(size_t capacity, struct poor_damage_rect (*rects)[c
 		struct poor_damage_rect rects[capacity]; \
 	} name
 
-#define h_damage_region(region) ARRAY_SIZE((region)->rects), &(region)->rects, &(region)->count
-#define h_damage_rects(region) (region)->count, arrview_first((region)->count, (region)->rects)
+void
+poor_damage_rects_add_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
+			   struct poor_damage_rect rect);
+
+void
+poor_damage_rects_clip_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count, int32_t width,
+			    int32_t height);
+
+static inline void
+poor_damage_rects_add_rects_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
+				 size_t others, const struct poor_damage_rect (*other)[others])
+{
+	foreach_array_const_ref(other, rect)
+		poor_damage_rects_add_impl(capacity, rects, count, *rect);
+}
+
+static inline void
+poor_damage_rects_whole_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count, int32_t width,
+			     int32_t height)
+{
+	assert(capacity && width > 0 && height > 0);
+	(*rects)[0] = (struct poor_damage_rect){ 0, 0, width, height };
+	*count = 1;
+}
 
 #ifdef __cplusplus
 }

@@ -11,11 +11,15 @@ static int64_t cells_over(int64_t size, int64_t cell)
 	return (size + cell - 1) / cell;
 }
 
-EXPORT void h_damage_map_init(struct poor_damage_grid *grid, size_t cells, uint64_t (*changed)[cells], int32_t width,
-			      int32_t height, int32_t cell_width, int32_t cell_height)
+EXPORT void poor_damage_map_init_impl(struct poor_damage_surface *surface, struct poor_damage_grid *grid, size_t cells,
+				      uint64_t (*changed)[cells], int32_t width, int32_t height, int32_t cell_width,
+				      int32_t cell_height)
 {
-	int64_t least = 1, most = greater(cells_over(width, cell_width), cells_over(height, cell_height));
+	int64_t least = 1, most;
 
+	assert(cells && cell_width > 0 && cell_height > 0);
+	poor_damage_surface_init(surface, width, height);
+	most = greater(cells_over(width, cell_width), cells_over(height, cell_height));
 	while (least < most) {
 		int64_t scale = least + (most - least) / 2;
 
@@ -62,18 +66,24 @@ static void add_band_impl(const struct poor_damage_surface *surface, const struc
 			;
 		x = (int64_t)start * grid->cell_width;
 		width = lesser((int64_t)column * grid->cell_width, surface->width) - x;
-		h_damage_region_add(capacity, region, count,
-				    (struct poor_damage_rect){ (int32_t)x, (int32_t)y, (int32_t)width, (int32_t)height });
+		poor_damage_rects_add(region, count,
+				      (struct poor_damage_rect){ (int32_t)x, (int32_t)y, (int32_t)width, (int32_t)height });
 	}
 }
 
-EXPORT void h_damage_map_lacks(const struct poor_damage_surface *surface, const struct poor_damage_grid *grid,
-			       size_t cells, const uint64_t (*changed)[cells], uint64_t frame, size_t region_capacity,
-			       struct poor_damage_rect (*region)[region_capacity], size_t *region_count)
+EXPORT void poor_damage_map_lacks_impl(const struct poor_damage_surface *surface, const struct poor_damage_grid *grid,
+				       size_t cells, const uint64_t (*changed)[cells], uint64_t frame,
+				       size_t region_capacity, struct poor_damage_rect (*region)[region_capacity],
+				       size_t *region_count)
 {
 	size_t top = 0;
 	make_raster(raster, grid, changed);
 
+	assert(frame <= surface->frame);
+	if (!frame) {
+		poor_damage_rects_whole(region, region_count, surface->width, surface->height);
+		return;
+	}
 	*region_count = 0;
 	foreach_array_index(raster, row) {
 		if (same_changes((*raster)[row], (*raster)[top], frame))

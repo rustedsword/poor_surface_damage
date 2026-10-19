@@ -53,66 +53,24 @@ extern "C" {
  * each of them has to redraw everything.
  */
 #define poor_damage_buffers_init(buffers, width, height) \
-	poor_damage_buffers_init_impl(h_damage_buffers(buffers), width, height)
+	poor_damage_buffers_init_impl(&(buffers)->surface, h_damage_buffers(buffers), width, height)
 
 /* Mark buffer 'index' as empty, e.g. after it was recreated. The next frame drawn into it redraws everything. */
-#define poor_damage_buffers_forget(buffers, index) poor_damage_buffers_forget_impl(h_damage_buffers(buffers), index)
+#define poor_damage_buffers_forget(buffers, index) \
+	poor_damage_buffers_forget_impl(&(buffers)->surface, h_damage_buffers(buffers), index)
 
 /* Set 'region' to the damage that buffer 'index' has missed since it was last drawn into. */
 #define poor_damage_buffers_lacks(buffers, index, region) \
-	poor_damage_buffers_lacks_impl(h_damage_buffers(buffers), index, h_damage_region(region))
+	poor_damage_buffers_lacks_impl(h_damage_buffers(buffers), index, ARRAY_SIZE((region)->rects), \
+				       &(region)->rects, &(region)->count)
 
 /*
  * Call this after a frame with 'damage' was drawn into buffer 'index'. That buffer is now up to date, and all other
  * buffers are missing 'damage' as well. Returns the number of the frame.
  */
 #define poor_damage_buffers_drawn(buffers, index, ...) \
-	poor_damage_buffers_drawn_impl(h_damage_buffers(buffers), index, h_damage_rects((__VA_ARGS__)))
-
-static inline void
-poor_damage_buffers_init_impl(struct poor_damage_surface *surface, size_t buffers, size_t capacity,
-			      size_t (*counts)[buffers], struct poor_damage_rect (*rects)[buffers][capacity],
-			      int32_t width, int32_t height)
-{
-	h_damage_surface_init(surface, width, height);
-	foreach_array_index(counts, i)
-		poor_damage_region_whole_impl(capacity, &(*rects)[i], &(*counts)[i], width, height);
-}
-
-static inline void
-poor_damage_buffers_forget_impl(const struct poor_damage_surface *surface, size_t buffers, size_t capacity,
-				size_t (*counts)[buffers], struct poor_damage_rect (*rects)[buffers][capacity],
-				size_t index)
-{
-	assert(index < buffers);
-	poor_damage_region_whole_impl(capacity, &(*rects)[index], &(*counts)[index], surface->width, surface->height);
-}
-
-static inline void
-poor_damage_buffers_lacks_impl([[maybe_unused]] const struct poor_damage_surface *surface, size_t buffers,
-			       size_t capacity, const size_t (*counts)[buffers],
-			       const struct poor_damage_rect (*rects)[buffers][capacity], size_t index,
-			       size_t region_capacity, struct poor_damage_rect (*region)[region_capacity],
-			       size_t *region_count)
-{
-	assert(index < buffers);
-	*region_count = 0;
-	poor_damage_region_add_rects_impl(region_capacity, region, region_count, (*counts)[index],
-					  arrview_first((*counts)[index], (*rects)[index]));
-}
-
-static inline uint64_t
-poor_damage_buffers_drawn_impl(struct poor_damage_surface *surface, size_t buffers, size_t capacity,
-			       size_t (*counts)[buffers], struct poor_damage_rect (*rects)[buffers][capacity],
-			       size_t index, size_t damages, const struct poor_damage_rect (*damage)[damages])
-{
-	assert(index < buffers);
-	foreach_array_index(counts, i)
-		if (i != index)
-			poor_damage_region_add_rects_impl(capacity, &(*rects)[i], &(*counts)[i], damages, damage);
-	(*counts)[index] = 0;
-	return ++surface->frame;
-}
+	poor_damage_buffers_drawn_impl(&(buffers)->surface, h_damage_buffers(buffers), index, (__VA_ARGS__)->count, \
+				       arrview_first((__VA_ARGS__)->count, (__VA_ARGS__)->rects))
 
 /* Implementation details, subject to change. */
 
@@ -124,8 +82,50 @@ poor_damage_buffers_drawn_impl(struct poor_damage_surface *surface, size_t buffe
 	} name
 
 #define h_damage_buffers(buffers) \
-	&(buffers)->surface, ARRAY_SIZE((buffers)->counts), ARRAY_SIZE((buffers)->rects[0]), &(buffers)->counts, \
-		&(buffers)->rects
+	ARRAY_SIZE((buffers)->counts), ARRAY_SIZE((buffers)->rects[0]), &(buffers)->counts, &(buffers)->rects
+
+static inline void
+poor_damage_buffers_init_impl(struct poor_damage_surface *surface, size_t buffers, size_t capacity,
+			      size_t (*counts)[buffers], struct poor_damage_rect (*rects)[buffers][capacity],
+			      int32_t width, int32_t height)
+{
+	poor_damage_surface_init(surface, width, height);
+	foreach_array_index(counts, i)
+		poor_damage_rects_whole((*rects)[i], &(*counts)[i], width, height);
+}
+
+static inline void
+poor_damage_buffers_forget_impl(const struct poor_damage_surface *surface, size_t buffers, size_t capacity,
+				size_t (*counts)[buffers], struct poor_damage_rect (*rects)[buffers][capacity],
+				size_t index)
+{
+	assert(index < buffers);
+	poor_damage_rects_whole((*rects)[index], &(*counts)[index], surface->width, surface->height);
+}
+
+static inline void
+poor_damage_buffers_lacks_impl(size_t buffers, size_t capacity, const size_t (*counts)[buffers],
+			       const struct poor_damage_rect (*rects)[buffers][capacity], size_t index,
+			       size_t region_capacity, struct poor_damage_rect (*region)[region_capacity],
+			       size_t *region_count)
+{
+	assert(index < buffers);
+	*region_count = 0;
+	poor_damage_rects_add_rects(region, region_count, arrview_first((*counts)[index], (*rects)[index]));
+}
+
+static inline uint64_t
+poor_damage_buffers_drawn_impl(struct poor_damage_surface *surface, size_t buffers, size_t capacity,
+			       size_t (*counts)[buffers], struct poor_damage_rect (*rects)[buffers][capacity],
+			       size_t index, size_t damages, const struct poor_damage_rect (*damage)[damages])
+{
+	assert(index < buffers);
+	foreach_array_index(counts, i)
+		if (i != index)
+			poor_damage_rects_add_rects((*rects)[i], &(*counts)[i], damage);
+	(*counts)[index] = 0;
+	return ++surface->frame;
+}
 
 #ifdef __cplusplus
 }

@@ -5,7 +5,7 @@
 /*
  * libpoor_surface_damage keeps track of damage: which parts of a surface changed, and which parts each buffer still
  * has to redraw. It never allocates memory: you declare each type with the capacities you need, and put it wherever
- * you like.
+ * you like. The macros may evaluate their tracker, region and array arguments more than once.
  *
  *  - poor_damage_region.h: a set of damaged rects with a fixed capacity
  *  - poor_damage_buffers.h: the damage that each buffer of a swapchain is missing

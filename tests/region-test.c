@@ -143,8 +143,7 @@ TEST(capacities_known_at_run_time_take_views)
 	size_t capacity = 3, count = 0;
 
 	for (int32_t i = 0; i < 10; i++)
-		poor_damage_region_add_impl(capacity, arrview_first(capacity, storage), &count,
-					    (struct poor_damage_rect){ 30 * i, 0, 10, 10 });
+		poor_damage_rects_add(arrview_first(capacity, storage), &count, (struct poor_damage_rect){ 30 * i, 0, 10, 10 });
 	assert(count == 3);
 }
 
