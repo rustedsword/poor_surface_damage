@@ -31,14 +31,16 @@ present(buffer, damage)             // the frame damage, not the repair
 
 ## Layout
 
-One header and one source file per module, like poor_loop:
+One header per module, like poor_loop. Small functions are inline in the headers, and so are all asserts: they follow
+the `NDEBUG` of the application, not the one the library was built with. Only the modules with real work to do have a
+source file:
 
 | Header | Source | Contents |
 |---|---|---|
 | `poor_damage_region.h` | `region.c` | rects and regions |
 | `poor_damage_surface.h` | — | surface size and frame counter shared by the trackers, buffer ages |
-| `poor_damage_buffers.h` | `buffers.c` | the damage that each buffer is missing |
-| `poor_damage_history.h` | `history.c` | the damage of the last few frames |
+| `poor_damage_buffers.h` | — | the damage that each buffer is missing |
+| `poor_damage_history.h` | — | the damage of the last few frames |
 | `poor_damage_map.h` | `map.c` | a low resolution image of the frame that last changed each cell |
 | `poor_surface_damage.h` | — | includes all of the above |
 

@@ -83,33 +83,15 @@ static void make_room(size_t capacity, struct poor_damage_rect (*rects)[capacity
 	both = bounds(&(*rects)[first], &(*rects)[second]);
 	(*rects)[second] = (*rects)[--*count];
 	(*rects)[first] = (*rects)[--*count];
-	poor_damage_region_add_impl(capacity, rects, count, both);
+	h_damage_region_add(capacity, rects, count, both);
 }
 
-EXPORT void poor_damage_region_add_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
-					struct poor_damage_rect rect)
+EXPORT void h_damage_region_add(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
+				struct poor_damage_rect rect)
 {
-	assert(capacity && *count <= capacity);
-	if (rect.width <= 0 || rect.height <= 0)
-		return;
 	for (absorb(capacity, rects, count, &rect); *count == capacity; absorb(capacity, rects, count, &rect))
 		make_room(capacity, rects, count, &rect);
 	(*rects)[(*count)++] = rect;
-}
-
-EXPORT void poor_damage_region_add_rects_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
-					      size_t others, const struct poor_damage_rect (*other)[others])
-{
-	foreach_array_const_ref(other, rect)
-		poor_damage_region_add_impl(capacity, rects, count, *rect);
-}
-
-EXPORT void poor_damage_region_whole_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
-					  int32_t width, int32_t height)
-{
-	assert(capacity && width > 0 && height > 0);
-	(*rects)[0] = (struct poor_damage_rect){ 0, 0, width, height };
-	*count = 1;
 }
 
 EXPORT void poor_damage_region_clip_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,

@@ -1,6 +1,6 @@
 damage = library(
 	'poor_surface_damage',
-	sources: [ 'region.c', 'buffers.c', 'history.c', 'map.c' ],
+	sources: [ 'region.c', 'map.c' ],
 	include_directories: inc,
 	version: meson.project_version(),
 	soversion: '0',

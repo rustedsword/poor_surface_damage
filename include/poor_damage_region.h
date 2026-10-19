@@ -2,6 +2,7 @@
 #ifndef POOR_DAMAGE_REGION_H
 #define POOR_DAMAGE_REGION_H
 
+#include <assert.h>
 #include <poor_array.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -65,16 +66,34 @@ struct poor_damage_rect {
 	poor_damage_region_clip_impl(h_damage_region(region), width, height)
 
 void
+h_damage_region_add(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
+		    struct poor_damage_rect rect);
+
+static inline void
 poor_damage_region_add_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
-			    struct poor_damage_rect rect);
+			    struct poor_damage_rect rect)
+{
+	assert(capacity && *count <= capacity);
+	if (rect.width > 0 && rect.height > 0)
+		h_damage_region_add(capacity, rects, count, rect);
+}
 
-void
+static inline void
 poor_damage_region_add_rects_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
-				  size_t others, const struct poor_damage_rect (*other)[others]);
+				  size_t others, const struct poor_damage_rect (*other)[others])
+{
+	foreach_array_const_ref(other, rect)
+		poor_damage_region_add_impl(capacity, rects, count, *rect);
+}
 
-void
+static inline void
 poor_damage_region_whole_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
-			      int32_t width, int32_t height);
+			      int32_t width, int32_t height)
+{
+	assert(capacity && width > 0 && height > 0);
+	(*rects)[0] = (struct poor_damage_rect){ 0, 0, width, height };
+	*count = 1;
+}
 
 void
 poor_damage_region_clip_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,

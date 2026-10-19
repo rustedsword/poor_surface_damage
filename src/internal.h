@@ -2,8 +2,6 @@
 #ifndef POOR_DAMAGE_INTERNAL_H
 #define POOR_DAMAGE_INTERNAL_H
 
-#include <assert.h>
-
 #include "poor_surface_damage.h"
 
 #define EXPORT [[gnu::visibility("default")]]

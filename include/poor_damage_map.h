@@ -98,14 +98,35 @@ struct poor_damage_grid {
 #define poor_damage_map_drawn(map, ...) poor_damage_map_drawn_impl(h_damage_map(map), h_damage_rects((__VA_ARGS__)))
 
 void
+h_damage_map_init(struct poor_damage_grid *grid, size_t cells, uint64_t (*changed)[cells], int32_t width,
+		  int32_t height, int32_t cell_width, int32_t cell_height);
+
+static inline void
 poor_damage_map_init_impl(struct poor_damage_surface *surface, struct poor_damage_grid *grid, size_t cells,
 			  uint64_t (*changed)[cells], int32_t width, int32_t height, int32_t cell_width,
-			  int32_t cell_height);
+			  int32_t cell_height)
+{
+	assert(cells && cell_width > 0 && cell_height > 0);
+	h_damage_surface_init(surface, width, height);
+	h_damage_map_init(grid, cells, changed, width, height, cell_width, cell_height);
+}
 
 void
+h_damage_map_lacks(const struct poor_damage_surface *surface, const struct poor_damage_grid *grid, size_t cells,
+		   const uint64_t (*changed)[cells], uint64_t frame, size_t region_capacity,
+		   struct poor_damage_rect (*region)[region_capacity], size_t *region_count);
+
+static inline void
 poor_damage_map_lacks_impl(const struct poor_damage_surface *surface, const struct poor_damage_grid *grid, size_t cells,
 			   const uint64_t (*changed)[cells], uint64_t frame, size_t region_capacity,
-			   struct poor_damage_rect (*region)[region_capacity], size_t *region_count);
+			   struct poor_damage_rect (*region)[region_capacity], size_t *region_count)
+{
+	assert(region_capacity && frame <= surface->frame);
+	if (frame)
+		h_damage_map_lacks(surface, grid, cells, changed, frame, region_capacity, region, region_count);
+	else
+		poor_damage_region_whole_impl(region_capacity, region, region_count, surface->width, surface->height);
+}
 
 uint64_t
 poor_damage_map_drawn_impl(struct poor_damage_surface *surface, const struct poor_damage_grid *grid, size_t cells,
