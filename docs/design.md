@@ -223,6 +223,13 @@ With 1 buffer every tracker redraws 3.55%, which is exactly the frame damage. Wi
 trackers redraw about 3–4 times more pixels than actually changed, but that comes from rect damage itself (the old and
 new bounds of a moving box), not from the trackers.
 
+`damage-bench` times the trackers without drawing anything. It records the damage of five workloads (the scene at
+640×480 and 1920×1080, widgets that change at random, small rects scattered over 3840×2160, and typing), replays it
+with every buffer order, 1–4 buffers and 4–64 rects, and prints the CPU cycles that the tracker takes per frame, the
+share of them spent in `drawn()`, and the share of pixels redrawn. It counts cycles with perf, so it needs
+`kernel.perf_event_paranoid = -1`. `--verify` checks every repair pixel by pixel instead. To compare two builds, run it
+in both and pass the outputs to `harness/compare-bench.py`.
+
 ## Examples
 
 Both examples are built if Vulkan, wayland-client, wayland-protocols, wayland-scanner and glslc are found

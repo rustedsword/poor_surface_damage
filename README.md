@@ -44,5 +44,6 @@ or from the submodule. The examples also need Vulkan, wayland-client, wayland-pr
     $ ninja -C build/
     $ meson test -C build/                              # add --no-suite vulkan if you have no Vulkan device
     $ build/harness/damage-sim --rects 8                # compares the trackers
+    $ build/harness/damage-bench --tracker buffers      # times a tracker, needs kernel.perf_event_paranoid=-1
     $ build/examples/vk-damage --tracker map --flash    # a Vulkan window that tints what it redraws
     $ build/examples/shm-damage --copy --verify         # a wl_shm window that copies what a buffer missed

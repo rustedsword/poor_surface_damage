@@ -11,3 +11,7 @@ harness_dep = declare_dependency(
 )
 
 executable('damage-sim', 'damage-sim.c', dependencies: harness_dep)
+
+if cc.has_header('linux/perf_event.h')
+	executable('damage-bench', 'damage-bench.c', dependencies: harness_dep)
+endif

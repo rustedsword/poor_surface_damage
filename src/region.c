@@ -40,9 +40,16 @@ static int64_t waste(const struct poor_damage_rect *a, const struct poor_damage_
 	return area(&both) - area(a) - area(b);
 }
 
+static bool contains(const struct poor_damage_rect *a, const struct poor_damage_rect *b)
+{
+	return (a->x <= b->x) & (a->y <= b->y) & ((int64_t)a->x + a->width >= (int64_t)b->x + b->width) &
+	       ((int64_t)a->y + a->height >= (int64_t)b->y + b->height);
+}
+
 /* Merge every rect that touches or overlaps 'rect' into it. The rects of a region never touch each other, so only
- * 'rect' has to be checked. */
-static void absorb(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
+ * 'rect' has to be checked, and a rect that covers 'rect' is the only one it touches. Returns false in that case, as
+ * there is nothing to add. */
+static bool absorb(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
 		   struct poor_damage_rect *rect)
 {
 	for (size_t i = 0; i < *count;) {
@@ -50,10 +57,13 @@ static void absorb(size_t capacity, struct poor_damage_rect (*rects)[capacity], 
 			i++;
 			continue;
 		}
+		if (contains(&(*rects)[i], rect))
+			return false;
 		*rect = bounds(&(*rects)[i], rect);
 		(*rects)[i] = (*rects)[--*count];
 		i = 0;
 	}
+	return true;
 }
 
 /* The region is full: merge the two rects, 'rect' included, whose bounding box adds the least undamaged area */
@@ -91,9 +101,13 @@ EXPORT void poor_damage_rects_add_impl(size_t capacity, struct poor_damage_rect 
 {
 	if (rect.width <= 0 || rect.height <= 0)
 		return;
-	for (absorb(capacity, rects, count, &rect); *count == capacity; absorb(capacity, rects, count, &rect))
+	while (absorb(capacity, rects, count, &rect)) {
+		if (*count < capacity) {
+			(*rects)[(*count)++] = rect;
+			return;
+		}
 		make_room(capacity, rects, count, &rect);
-	(*rects)[(*count)++] = rect;
+	}
 }
 
 EXPORT void poor_damage_rects_clip_impl(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,

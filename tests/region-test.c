@@ -86,6 +86,18 @@ TEST(merged_rects_take_in_the_rects_they_reach)
 	assert(region.count == 3 && has(&region, 0, 0, 145, 30) && has(&region, 900, 900, 10, 10));
 }
 
+TEST(rects_covered_by_a_merge_add_nothing)
+{
+	static const struct poor_damage_rect rects[] = {
+		{ 30, 90, 30, 20 }, { 70, 10, 10, 10 }, { 60, 40, 40, 10 }, { 30, 40, 10, 40 }, { 60, 60, 10, 30 },
+	};
+	region4 region = POOR_DAMAGE_REGION_INIT;
+
+	foreach_array_const_ref(rects, rect)
+		poor_damage_region_add(&region, *rect);
+	assert(region.count == 2 && has(&region, 70, 10, 10, 10) && has(&region, 30, 40, 70, 70));
+}
+
 TEST(many_rects_stay_covered)
 {
 	region4 region = POOR_DAMAGE_REGION_INIT;

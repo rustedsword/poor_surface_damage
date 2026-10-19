@@ -110,8 +110,13 @@ poor_damage_buffers_lacks_impl(size_t buffers, size_t capacity, const size_t (*c
 			       size_t *region_count)
 {
 	assert(index < buffers);
-	*region_count = 0;
-	poor_damage_rects_add_rects(region, region_count, arrview_first((*counts)[index], (*rects)[index]));
+	if ((*counts)[index] > region_capacity) {
+		*region_count = 0;
+		poor_damage_rects_add_rects(region, region_count, arrview_first((*counts)[index], (*rects)[index]));
+		return;
+	}
+	*region_count = (*counts)[index];
+	copy_array(region, arrview_first(*region_count, (*rects)[index]));
 }
 
 static inline uint64_t

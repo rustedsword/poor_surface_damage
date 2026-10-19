@@ -71,6 +71,9 @@ enum tracker_option {
 
 #define TRACKER_CAPACITY_USAGE \
 	"  --rects N     maximum rects per region, up to 64 (default: 4)\n" \
+	TRACKER_STORAGE_USAGE
+
+#define TRACKER_STORAGE_USAGE \
 	"  --history N   frames kept by the history tracker, up to 64 (default: 8)\n" \
 	"  --cells N     cells of the map, up to 16384 (default: 4096)\n" \
 	"  --cell-size WxH  smallest cell size of the map (default: 16x16)\n"
