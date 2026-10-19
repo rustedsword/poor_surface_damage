@@ -23,61 +23,61 @@ static bool is_impl(size_t count, const struct poor_damage_rect (*rects)[count],
 TEST(buffers_that_hold_nothing_lack_everything)
 {
 	history8 history = POOR_DAMAGE_HISTORY_INIT(640, 480);
-	region lacks;
+	region stale;
 
-	poor_damage_history_lacks(&history, 0, &lacks);
-	assert(is(&lacks, 0, 0, 640, 480));
+	poor_damage_history_since(&history, 0, &stale);
+	assert(is(&stale, 0, 0, 640, 480));
 	assert(drawn(&history, 0, 0, 10, 10) == 1);
-	poor_damage_history_lacks(&history, 0, &lacks);
-	assert(is(&lacks, 0, 0, 640, 480));
+	poor_damage_history_since(&history, 0, &stale);
+	assert(is(&stale, 0, 0, 640, 480));
 }
 
 TEST(buffers_lack_the_frames_drawn_since_theirs)
 {
 	history8 history;
-	region lacks;
+	region stale;
 
 	poor_damage_history_init(&history, 640, 480);
 	drawn(&history, 0, 0, 10, 10);
 	drawn(&history, 100, 100, 10, 10);
 	assert(drawn(&history, 100, 110, 10, 10) == 3);
-	poor_damage_history_lacks(&history, 3, &lacks);
-	assert(!lacks.count);
-	poor_damage_history_lacks(&history, 2, &lacks);
-	assert(is(&lacks, 100, 110, 10, 10));
-	poor_damage_history_lacks(&history, 1, &lacks);
-	assert(is(&lacks, 100, 100, 10, 20));
+	poor_damage_history_since(&history, 3, &stale);
+	assert(!stale.count);
+	poor_damage_history_since(&history, 2, &stale);
+	assert(is(&stale, 100, 110, 10, 10));
+	poor_damage_history_since(&history, 1, &stale);
+	assert(is(&stale, 100, 100, 10, 20));
 }
 
 TEST(frames_older_than_the_history_are_unknown)
 {
 	history8 history = POOR_DAMAGE_HISTORY_INIT(640, 480);
-	region lacks;
+	region stale;
 
 	for (int32_t i = 0; i <= 8; i++)
 		drawn(&history, 20 * i, 0, 10, 10);
-	poor_damage_history_lacks(&history, 1, &lacks);
-	assert(lacks.count && !is(&lacks, 0, 0, 640, 480));
+	poor_damage_history_since(&history, 1, &stale);
+	assert(stale.count && !is(&stale, 0, 0, 640, 480));
 	drawn(&history, 300, 300, 10, 10);
-	poor_damage_history_lacks(&history, 1, &lacks);
-	assert(is(&lacks, 0, 0, 640, 480));
-	poor_damage_history_lacks(&history, 2, &lacks);
-	assert(!is(&lacks, 0, 0, 640, 480));
+	poor_damage_history_since(&history, 1, &stale);
+	assert(is(&stale, 0, 0, 640, 480));
+	poor_damage_history_since(&history, 2, &stale);
+	assert(!is(&stale, 0, 0, 640, 480));
 }
 
 TEST(a_short_history_forgets_sooner)
 {
 	history2 history = POOR_DAMAGE_HISTORY_INIT(640, 480);
-	region lacks;
+	region stale;
 
 	drawn(&history, 0, 0, 10, 10);
 	drawn(&history, 20, 0, 10, 10);
 	drawn(&history, 40, 0, 10, 10);
-	poor_damage_history_lacks(&history, 1, &lacks);
-	assert(lacks.count == 2);
+	poor_damage_history_since(&history, 1, &stale);
+	assert(stale.count == 2);
 	drawn(&history, 60, 0, 10, 10);
-	poor_damage_history_lacks(&history, 1, &lacks);
-	assert(is(&lacks, 0, 0, 640, 480));
+	poor_damage_history_since(&history, 1, &stale);
+	assert(is(&stale, 0, 0, 640, 480));
 }
 
 TEST(ages_count_back_from_the_last_frame)

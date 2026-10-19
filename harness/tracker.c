@@ -67,20 +67,20 @@ void tracker_repair(const struct tracker *tracker, size_t index, const region *d
 	case TRACKER_BUFFERS: {
 		make_kept(kept, tracker, tracker->buffers);
 
-		poor_damage_buffers_lacks_impl(tracker->buffers, rects, kept_counts, kept, index, rects, out,
-					       &repair->count);
+		poor_damage_buffers_get_impl(tracker->buffers, rects, kept_counts, kept, index, rects, out,
+					     &repair->count);
 		break;
 	}
 	case TRACKER_HISTORY: {
 		make_kept(kept, tracker, tracker->options.frames);
 
-		poor_damage_history_lacks_impl(&tracker->surface, tracker->options.frames, rects, kept_counts, kept,
+		poor_damage_history_since_impl(&tracker->surface, tracker->options.frames, rects, kept_counts, kept,
 					       poor_damage_frame_of_age(tracker, tracker->ages[index]), rects, out,
 					       &repair->count);
 		break;
 	}
 	case TRACKER_MAP:
-		poor_damage_map_lacks_impl(&tracker->surface, &tracker->grid, tracker->options.cells, changed_of(tracker),
+		poor_damage_map_since_impl(&tracker->surface, &tracker->grid, tracker->options.cells, changed_of(tracker),
 					   tracker->holds[index], rects, out, &repair->count);
 		break;
 	}

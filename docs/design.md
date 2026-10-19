@@ -57,7 +57,7 @@ don't help.
 
 All three tell you what buffer *i* is missing. They differ in what they store and in how far back they can look.
 
-| Tracker | Stores | `drawn()` | `lacks()` | Looks back |
+| Tracker | Stores | `drawn()` | `get()` / `since()` | Looks back |
 |---|---|---|---|---|
 | buffers | a region per buffer | adds the damage to every other buffer, O(buffers) | copies one region | forever, in any order |
 | history | a region per frame | stores one region | unions the last age−1 regions | as many frames as it keeps |
@@ -75,7 +75,7 @@ damage_region damage = POOR_DAMAGE_REGION_INIT, repair;
 
 poor_damage_buffers_init(&tracker, width, height);
 ...
-poor_damage_buffers_lacks(&tracker, index, &repair);
+poor_damage_buffers_get(&tracker, index, &repair);
 poor_damage_region_add_region(&repair, &damage);
 /* redraw repair */
 poor_damage_buffers_drawn(&tracker, index, &damage);
@@ -96,7 +96,7 @@ WebRender.
 ```c
 frame_damage history = POOR_DAMAGE_HISTORY_INIT(width, height);
 ...
-poor_damage_history_lacks(&history, poor_damage_frame_of_age(&history, egl_age), &repair);
+poor_damage_history_since(&history, poor_damage_frame_of_age(&history, egl_age), &repair);
 poor_damage_region_add_region(&repair, &damage);
 /* redraw repair */
 poor_damage_history_drawn(&history, &damage);
@@ -133,7 +133,7 @@ uint64_t holds[3] = {};                                  /* the frame that each 
 
 poor_damage_map_init(&screen.map, width, height, 64, 64);
 ...
-poor_damage_map_lacks(&screen.map, holds[index], &repair);
+poor_damage_map_since(&screen.map, holds[index], &repair);
 poor_damage_region_add_region(&repair, &damage);
 /* redraw repair */
 holds[index] = poor_damage_map_drawn(&screen.map, &damage);

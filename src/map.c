@@ -71,7 +71,7 @@ static void add_band_impl(const struct poor_damage_surface *surface, const struc
 	}
 }
 
-EXPORT void poor_damage_map_lacks_impl(const struct poor_damage_surface *surface, const struct poor_damage_grid *grid,
+EXPORT void poor_damage_map_since_impl(const struct poor_damage_surface *surface, const struct poor_damage_grid *grid,
 				       size_t cells, const uint64_t (*changed)[cells], uint64_t frame,
 				       size_t region_capacity, struct poor_damage_rect (*region)[region_capacity],
 				       size_t *region_count)

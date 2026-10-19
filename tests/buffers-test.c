@@ -30,49 +30,49 @@ static region damage_of(int32_t x, int32_t y, int32_t width, int32_t height)
 TEST(buffers_lack_what_was_drawn_since_their_frame)
 {
 	region first = damage_of(0, 0, 10, 10), second = damage_of(100, 100, 10, 10), third = damage_of(0, 50, 10, 10);
-	region lacks;
+	region stale;
 	triple buffers;
 
 	poor_damage_buffers_init(&buffers, 640, 480);
 	assert(poor_damage_buffers_drawn(&buffers, 0, &first) == 1);
-	poor_damage_buffers_lacks(&buffers, 0, &lacks);
-	assert(!lacks.count);
-	poor_damage_buffers_lacks(&buffers, 1, &lacks);
-	assert(is(&lacks, 0, 0, 640, 480));
+	poor_damage_buffers_get(&buffers, 0, &stale);
+	assert(!stale.count);
+	poor_damage_buffers_get(&buffers, 1, &stale);
+	assert(is(&stale, 0, 0, 640, 480));
 	poor_damage_buffers_drawn(&buffers, 1, &second);
-	poor_damage_buffers_lacks(&buffers, 0, &lacks);
-	assert(is(&lacks, 100, 100, 10, 10));
+	poor_damage_buffers_get(&buffers, 0, &stale);
+	assert(is(&stale, 100, 100, 10, 10));
 	poor_damage_buffers_drawn(&buffers, 0, &third);
-	poor_damage_buffers_lacks(&buffers, 1, &lacks);
-	assert(is(&lacks, 0, 50, 10, 10));
+	poor_damage_buffers_get(&buffers, 1, &stale);
+	assert(is(&stale, 0, 50, 10, 10));
 	poor_damage_buffers_drawn(&buffers, 2, &second);
-	poor_damage_buffers_lacks(&buffers, 1, &lacks);
-	assert(lacks.count == 2);
+	poor_damage_buffers_get(&buffers, 1, &stale);
+	assert(stale.count == 2);
 }
 
 TEST(a_forgotten_buffer_lacks_everything)
 {
-	region damage = damage_of(0, 0, 10, 10), lacks;
+	region damage = damage_of(0, 0, 10, 10), stale;
 	triple buffers;
 
 	poor_damage_buffers_init(&buffers, 640, 480);
 	poor_damage_buffers_drawn(&buffers, 1, &damage);
 	poor_damage_buffers_forget(&buffers, 1);
-	poor_damage_buffers_lacks(&buffers, 1, &lacks);
-	assert(is(&lacks, 0, 0, 640, 480));
+	poor_damage_buffers_get(&buffers, 1, &stale);
+	assert(is(&stale, 0, 0, 640, 480));
 }
 
 TEST(buffers_of_one_rect_lack_bounding_boxes)
 {
-	region left = damage_of(0, 0, 10, 10), right = damage_of(100, 0, 10, 10), lacks;
+	region left = damage_of(0, 0, 10, 10), right = damage_of(100, 0, 10, 10), stale;
 	boxes buffers;
 
 	poor_damage_buffers_init(&buffers, 640, 480);
 	foreach_array_index(buffers.counts, i)
 		poor_damage_buffers_drawn(&buffers, i, &left);
 	poor_damage_buffers_drawn(&buffers, 7, &right);
-	poor_damage_buffers_lacks(&buffers, 0, &lacks);
-	assert(is(&lacks, 0, 0, 110, 10));
-	poor_damage_buffers_lacks(&buffers, 7, &lacks);
-	assert(!lacks.count);
+	poor_damage_buffers_get(&buffers, 0, &stale);
+	assert(is(&stale, 0, 0, 110, 10));
+	poor_damage_buffers_get(&buffers, 7, &stale);
+	assert(!stale.count);
 }

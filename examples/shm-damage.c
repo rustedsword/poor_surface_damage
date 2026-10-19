@@ -258,7 +258,7 @@ static uint64_t area(const region *region)
 static void draw_frame(struct app *app, size_t index)
 {
 	struct buffer *buffer = &app->buffers[index];
-	region damage = POOR_DAMAGE_REGION_INIT, nothing = POOR_DAMAGE_REGION_INIT, lacks, repair;
+	region damage = POOR_DAMAGE_REGION_INIT, nothing = POOR_DAMAGE_REGION_INIT, stale, repair;
 	make_pixels(pixels, buffer->pixels, app);
 
 	if (!app->frame)
@@ -267,10 +267,10 @@ static void draw_frame(struct app *app, size_t index)
 	poor_damage_region_clip(&damage, app->options.width, app->options.height);
 	tracker_limit(&app->tracker, &damage);
 	if (app->options.copy && app->frame) {
-		tracker_repair(&app->tracker, index, &nothing, &lacks);
-		foreach_array_const_ref(arrview_first(lacks.count, lacks.rects), rect)
+		tracker_repair(&app->tracker, index, &nothing, &stale);
+		foreach_array_const_ref(arrview_first(stale.count, stale.rects), rect)
 			copy_rect(app, app->buffers[app->front].pixels, buffer->pixels, *rect);
-		app->stats.copied += area(&lacks);
+		app->stats.copied += area(&stale);
 		repair = damage;
 	} else {
 		tracker_repair(&app->tracker, index, &damage, &repair);

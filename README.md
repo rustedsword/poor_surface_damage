@@ -27,7 +27,7 @@ damage_region damage = POOR_DAMAGE_REGION_INIT, repair;
 poor_damage_buffers_init(&tracker, width, height);
 ...
 poor_damage_region_add(&damage, (struct poor_damage_rect){ x, y, w, h });
-poor_damage_buffers_lacks(&tracker, index, &repair);
+poor_damage_buffers_get(&tracker, index, &repair);
 poor_damage_region_add_region(&repair, &damage);
 /* redraw 'repair' into buffer 'index', then present it with 'damage' */
 poor_damage_buffers_drawn(&tracker, index, &damage);

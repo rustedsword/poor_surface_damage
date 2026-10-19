@@ -32,7 +32,7 @@ extern "C" {
  *
  *   // fill 'repair' with the damage of all frames drawn since the back buffer was last drawn into
  *   eglQuerySurface(display, surface, EGL_BUFFER_AGE_EXT, &age);
- *   poor_damage_history_lacks(&history, poor_damage_frame_of_age(&history, age), &repair);
+ *   poor_damage_history_since(&history, poor_damage_frame_of_age(&history, age), &repair);
  *
  *   // add the damage of this frame to 'repair'
  *   poor_damage_region_add_region(&repair, &damage);
@@ -58,8 +58,8 @@ extern "C" {
  * Set 'region' to the damage that a buffer holding 'frame' has missed. If 'frame' is 0 or older than the history,
  * 'region' is set to the whole surface.
  */
-#define poor_damage_history_lacks(history, frame, region) \
-	poor_damage_history_lacks_impl(h_damage_history(history), frame, ARRAY_SIZE((region)->rects), \
+#define poor_damage_history_since(history, frame, region) \
+	poor_damage_history_since_impl(h_damage_history(history), frame, ARRAY_SIZE((region)->rects), \
 				       &(region)->rects, &(region)->count)
 
 /* Call this after a frame with 'damage' was drawn. Returns the number of the frame. */
@@ -81,7 +81,7 @@ extern "C" {
 		&(history)->rects
 
 static inline void
-poor_damage_history_lacks_impl(const struct poor_damage_surface *surface, size_t frames, size_t capacity,
+poor_damage_history_since_impl(const struct poor_damage_surface *surface, size_t frames, size_t capacity,
 			       const size_t (*counts)[frames], const struct poor_damage_rect (*rects)[frames][capacity],
 			       uint64_t frame, size_t region_capacity, struct poor_damage_rect (*region)[region_capacity],
 			       size_t *region_count)

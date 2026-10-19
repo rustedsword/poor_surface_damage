@@ -9,7 +9,7 @@
 #include "sim.h"
 
 static uint32_t storage[ENGINE_BUFFERS + 1][SIM_WIDTH * SIM_HEIGHT];
-static bool lacking[ENGINE_BUFFERS][SIM_WIDTH * SIM_HEIGHT];
+static bool stale[ENGINE_BUFFERS][SIM_WIDTH * SIM_HEIGHT];
 
 #define make_view(name, array, sim)									\
 	make_arrview_first(name##_all, (size_t)(sim)->width * (size_t)(sim)->height, array);		\
@@ -57,7 +57,7 @@ static void recreate(struct sim *sim, int32_t width, int32_t height)
 	foreach_array_ref(arrview_first(sim->options->buffers, storage), buffer)
 		foreach_array_ref(arrview_first((size_t)width * (size_t)height, *buffer), pixel)
 			*pixel = next(sim);
-	foreach_array_ref(arrview_first(sim->options->buffers, lacking), pixels)
+	foreach_array_ref(arrview_first(sim->options->buffers, stale), pixels)
 		fill_array(arrview_first((size_t)width * (size_t)height, *pixels), true);
 	engine_init(&sim->engine, sim->options->order, sim->options->buffers, next(sim) | 1);
 	tracker_init(&sim->tracker, &sim->options->tracker, sim->options->buffers, width, height);
@@ -68,15 +68,15 @@ static uint64_t exact(struct sim *sim, size_t index, const region *damage)
 {
 	uint64_t pixels = 0;
 
-	foreach_array_ref(arrview_first(sim->options->buffers, lacking), buffer) {
-		make_view(lacks, *buffer, sim);
+	foreach_array_ref(arrview_first(sim->options->buffers, stale), buffer) {
+		make_view(mask, *buffer, sim);
 
 		foreach_array_const_ref(arrview_first(damage->count, damage->rects), rect)
-			foreach_array_ref(arrview((size_t)rect->y, (size_t)rect->height, lacks), row)
+			foreach_array_ref(arrview((size_t)rect->y, (size_t)rect->height, mask), row)
 				fill_array(arrview((size_t)rect->x, (size_t)rect->width, *row), true);
 	}
-	make_view(lacks, lacking[index], sim);
-	foreach_array_ref(lacks_all, pixel) {
+	make_view(mask, stale[index], sim);
+	foreach_array_ref(mask_all, pixel) {
 		pixels += *pixel;
 		*pixel = false;
 	}

@@ -32,7 +32,7 @@ extern "C" {
  *   // Then, for each frame:
  *
  *   // fill 'repair' with all damage accumulated while other buffers were rendered
- *   poor_damage_buffers_lacks(&tracker, index, &repair);
+ *   poor_damage_buffers_get(&tracker, index, &repair);
  *
  *   // add the damage of this frame to 'repair'
  *   poor_damage_region_add_region(&repair, &damage);
@@ -60,9 +60,9 @@ extern "C" {
 	poor_damage_buffers_forget_impl(&(buffers)->surface, h_damage_buffers(buffers), index)
 
 /* Set 'region' to the damage that buffer 'index' has missed since it was last drawn into. */
-#define poor_damage_buffers_lacks(buffers, index, region) \
-	poor_damage_buffers_lacks_impl(h_damage_buffers(buffers), index, ARRAY_SIZE((region)->rects), \
-				       &(region)->rects, &(region)->count)
+#define poor_damage_buffers_get(buffers, index, region) \
+	poor_damage_buffers_get_impl(h_damage_buffers(buffers), index, ARRAY_SIZE((region)->rects), &(region)->rects, \
+				     &(region)->count)
 
 /*
  * Call this after a frame with 'damage' was drawn into buffer 'index'. That buffer is now up to date, and all other
@@ -104,10 +104,10 @@ poor_damage_buffers_forget_impl(const struct poor_damage_surface *surface, size_
 }
 
 static inline void
-poor_damage_buffers_lacks_impl(size_t buffers, size_t capacity, const size_t (*counts)[buffers],
-			       const struct poor_damage_rect (*rects)[buffers][capacity], size_t index,
-			       size_t region_capacity, struct poor_damage_rect (*region)[region_capacity],
-			       size_t *region_count)
+poor_damage_buffers_get_impl(size_t buffers, size_t capacity, const size_t (*counts)[buffers],
+			     const struct poor_damage_rect (*rects)[buffers][capacity], size_t index,
+			     size_t region_capacity, struct poor_damage_rect (*region)[region_capacity],
+			     size_t *region_count)
 {
 	assert(index < buffers);
 	if ((*counts)[index] > region_capacity) {

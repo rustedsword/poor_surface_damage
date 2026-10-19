@@ -44,7 +44,7 @@ extern "C" {
  *   // Then, for each frame:
  *
  *   // fill 'repair' with the cells that changed since buffer 'index' was last drawn into
- *   poor_damage_map_lacks(&screen.map, holds[index], &repair);
+ *   poor_damage_map_since(&screen.map, holds[index], &repair);
  *
  *   // add the damage of this frame to 'repair'
  *   poor_damage_region_add_region(&repair, &damage);
@@ -91,8 +91,8 @@ struct poor_damage_grid {
  * Set 'region' to the cells that changed after 'frame', which is what a buffer holding 'frame' has missed. If 'frame'
  * is 0, 'region' is set to the whole surface.
  */
-#define poor_damage_map_lacks(map, frame, region) \
-	poor_damage_map_lacks_impl(h_damage_map(map), frame, ARRAY_SIZE((region)->rects), &(region)->rects, \
+#define poor_damage_map_since(map, frame, region) \
+	poor_damage_map_since_impl(h_damage_map(map), frame, ARRAY_SIZE((region)->rects), &(region)->rects, \
 				   &(region)->count)
 
 /* Call this after a frame with 'damage' was drawn. Returns the number of the frame. */
@@ -146,7 +146,7 @@ poor_damage_map_init_impl(struct poor_damage_surface *surface, struct poor_damag
 			  int32_t cell_height);
 
 void
-poor_damage_map_lacks_impl(const struct poor_damage_surface *surface, const struct poor_damage_grid *grid, size_t cells,
+poor_damage_map_since_impl(const struct poor_damage_surface *surface, const struct poor_damage_grid *grid, size_t cells,
 			   const uint64_t (*changed)[cells], uint64_t frame, size_t region_capacity,
 			   struct poor_damage_rect (*region)[region_capacity], size_t *region_count);
 

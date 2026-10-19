@@ -148,17 +148,17 @@ TEST(cells_stay_within_the_surface)
 TEST(huge_cells_answer_within_the_surface)
 {
 	struct fews s;
-	region lacks;
+	region stale;
 
 	poor_damage_map_init(&s.map, 1'500'000'000, 1'000'000'000, 20, 1);
 	assert(has_grid(&s.map, 1'250'000'000, 62'500'000, 2, 16));
 	drawn(&s.map, 0, 0, 0, 0);
 	drawn(&s.map, 0, 0, INT32_MAX, INT32_MAX);
-	poor_damage_map_lacks(&s.map, 1, &lacks);
-	assert(is(&lacks, 0, 0, 1'500'000'000, 1'000'000'000));
+	poor_damage_map_since(&s.map, 1, &stale);
+	assert(is(&stale, 0, 0, 1'500'000'000, 1'000'000'000));
 	drawn(&s.map, 1'499'999'999, 999'999'999, 1, 1);
-	poor_damage_map_lacks(&s.map, 2, &lacks);
-	assert(is(&lacks, 1'250'000'000, 937'500'000, 250'000'000, 62'500'000));
+	poor_damage_map_since(&s.map, 2, &stale);
+	assert(is(&stale, 1'250'000'000, 937'500'000, 250'000'000, 62'500'000));
 }
 
 static int64_t over(int64_t size, int64_t cell)
@@ -193,14 +193,14 @@ TEST(cells_are_the_least_multiple_that_fits_the_budget)
 TEST(grids_follow_the_shape_of_the_surface)
 {
 	struct wides s;
-	region lacks;
+	region stale;
 
 	poor_damage_map_init(&s.map, 8000, 500, 64, 64);
 	assert(has_grid(&s.map, 64, 64, 125, 8));
 	drawn(&s.map, 0, 0, 8000, 500);
 	drawn(&s.map, 7990, 10, 5, 5);
-	poor_damage_map_lacks(&s.map, 1, &lacks);
-	assert(is(&lacks, 7936, 0, 64, 64));
+	poor_damage_map_since(&s.map, 1, &stale);
+	assert(is(&stale, 7936, 0, 64, 64));
 }
 
 TEST(buffers_of_arrays_are_budgets_of_all_their_cells)
@@ -216,59 +216,59 @@ TEST(buffers_of_arrays_are_budgets_of_all_their_cells)
 TEST(buffers_that_hold_nothing_lack_everything)
 {
 	struct squares s;
-	region lacks;
+	region stale;
 
 	poor_damage_map_init(&s.map, 640, 480, 1, 1);
-	poor_damage_map_lacks(&s.map, 0, &lacks);
-	assert(is(&lacks, 0, 0, 640, 480));
+	poor_damage_map_since(&s.map, 0, &stale);
+	assert(is(&stale, 0, 0, 640, 480));
 	assert(drawn(&s.map, 0, 0, 10, 10) == 1);
-	poor_damage_map_lacks(&s.map, 0, &lacks);
-	assert(is(&lacks, 0, 0, 640, 480));
+	poor_damage_map_since(&s.map, 0, &stale);
+	assert(is(&stale, 0, 0, 640, 480));
 }
 
 TEST(buffers_lack_whole_cells_that_changed_since_their_frame)
 {
 	struct squares s;
-	region lacks;
+	region stale;
 
 	poor_damage_map_init(&s.map, 640, 480, 20, 15);
 	drawn(&s.map, 25, 20, 10, 10);
-	poor_damage_map_lacks(&s.map, 1, &lacks);
-	assert(!lacks.count);
+	poor_damage_map_since(&s.map, 1, &stale);
+	assert(!stale.count);
 	drawn(&s.map, 25, 20, 10, 10);
 	drawn(&s.map, 300, 300, 1, 1);
-	poor_damage_map_lacks(&s.map, 2, &lacks);
-	assert(is(&lacks, 300, 300, 20, 15));
-	poor_damage_map_lacks(&s.map, 1, &lacks);
-	assert(lacks.count == 2 && covers(&lacks, &(struct poor_damage_rect){ 20, 15, 20, 15 }));
-	assert(covers(&lacks, &(struct poor_damage_rect){ 300, 300, 20, 15 }));
+	poor_damage_map_since(&s.map, 2, &stale);
+	assert(is(&stale, 300, 300, 20, 15));
+	poor_damage_map_since(&s.map, 1, &stale);
+	assert(stale.count == 2 && covers(&stale, &(struct poor_damage_rect){ 20, 15, 20, 15 }));
+	assert(covers(&stale, &(struct poor_damage_rect){ 300, 300, 20, 15 }));
 	for (int i = 0; i < 1000; i++)
 		drawn(&s.map, 0, 0, 0, 0);
-	poor_damage_map_lacks(&s.map, 1, &lacks);
-	assert(lacks.count == 2);
+	poor_damage_map_since(&s.map, 1, &stale);
+	assert(stale.count == 2);
 }
 
 TEST(cells_past_the_edges_are_clipped)
 {
 	struct squares s;
-	region lacks;
+	region stale;
 
 	poor_damage_map_init(&s.map, 650, 100, 21, 4);
 	drawn(&s.map, 640, 90, 100, 100);
 	drawn(&s.map, -50, -50, 10, 10);
-	poor_damage_map_lacks(&s.map, 1, &lacks);
-	assert(!lacks.count);
-	poor_damage_map_lacks(&s.map, 0, &lacks);
-	assert(is(&lacks, 0, 0, 650, 100));
+	poor_damage_map_since(&s.map, 1, &stale);
+	assert(!stale.count);
+	poor_damage_map_since(&s.map, 0, &stale);
+	assert(is(&stale, 0, 0, 650, 100));
 	drawn(&s.map, 640, 90, 100, 100);
-	poor_damage_map_lacks(&s.map, 2, &lacks);
-	assert(is(&lacks, 630, 88, 20, 12));
+	poor_damage_map_since(&s.map, 2, &stale);
+	assert(is(&stale, 630, 88, 20, 12));
 }
 
 TEST(many_changed_cells_stay_covered)
 {
 	struct squares s;
-	region lacks;
+	region stale;
 	struct poor_damage_rect rects[40];
 
 	poor_damage_map_init(&s.map, 640, 480, 1, 1);
@@ -277,24 +277,24 @@ TEST(many_changed_cells_stay_covered)
 		rects[i] = (struct poor_damage_rect){ (int32_t)i * 37 % 600, 11 * (int32_t)i, 5, 3 };
 		drawn(&s.map, rects[i].x, rects[i].y, rects[i].width, rects[i].height);
 	}
-	poor_damage_map_lacks(&s.map, 1, &lacks);
-	assert(lacks.count <= 4);
+	poor_damage_map_since(&s.map, 1, &stale);
+	assert(stale.count <= 4);
 	foreach_array_const_ref(rects, rect)
-		assert(covers(&lacks, rect));
+		assert(covers(&stale, rect));
 }
 
 TEST(buffers_share_memory_with_anything_else)
 {
 	struct scratch scratch = { .width = 8, .height = 8 };
-	region lacks;
+	region stale;
 
 	fill_array(scratch.bytes, 0xff);
 	poor_damage_map_init(&scratch.map, scratch.width, scratch.height, 2, 2);
 	assert(!scratch.cells[15] && has_grid(&scratch.map, 2, 2, 4, 4));
 	drawn(&scratch.map, 0, 0, 0, 0);
 	drawn(&scratch.map, 6, 6, 2, 2);
-	poor_damage_map_lacks(&scratch.map, poor_damage_frame_of_age(&scratch.map, 2), &lacks);
-	assert(is(&lacks, 6, 6, 2, 2) && scratch.cells[15] == 2);
-	poor_damage_map_lacks(&scratch.map, 0, &lacks);
-	assert(is(&lacks, 0, 0, 8, 8));
+	poor_damage_map_since(&scratch.map, poor_damage_frame_of_age(&scratch.map, 2), &stale);
+	assert(is(&stale, 6, 6, 2, 2) && scratch.cells[15] == 2);
+	poor_damage_map_since(&scratch.map, 0, &stale);
+	assert(is(&stale, 0, 0, 8, 8));
 }
