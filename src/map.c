@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 #include "internal.h"
 
-/* The cells in use of a raster, as 'rows' arrays of 'columns' */
+/* View the cells in use as 'rows' arrays of 'columns' cells */
 #define make_raster(name, grid, changed)								\
 	make_arrview_first(name##_cells, (grid)->rows * (grid)->columns, *(changed));			\
 	make_arrview_dim(name, (grid)->columns, name##_cells)
@@ -36,7 +36,7 @@ EXPORT void poor_damage_map_init_impl(struct poor_damage_surface *surface, struc
 
 #define same_changes(a, b, frame) same_changes_impl(ARRAY_SIZE(a), &auto_arr(a), &auto_arr(b), frame)
 
-/* Whether two rows changed the same cells after 'frame' */
+/* Whether the same cells of two rows changed after 'frame' */
 static bool same_changes_impl(size_t columns, const uint64_t (*a)[columns], const uint64_t (*b)[columns], uint64_t frame)
 {
 	foreach_array_index(a, column)
@@ -48,7 +48,7 @@ static bool same_changes_impl(size_t columns, const uint64_t (*a)[columns], cons
 #define add_band(surface, grid, changed, frame, top, bottom, capacity, region, count) \
 	add_band_impl(surface, grid, ARRAY_SIZE(changed), &auto_arr(changed), frame, top, bottom, capacity, region, count)
 
-/* The cells of rows from 'top' to 'bottom' that changed after 'frame' as the first of them did, within the surface */
+/* Add the cells that changed after 'frame' in rows 'top' to 'bottom', which all changed alike, clipped to the surface */
 static void add_band_impl(const struct poor_damage_surface *surface, const struct poor_damage_grid *grid, size_t columns,
 			  const uint64_t (*changed)[columns], uint64_t frame, size_t top, size_t bottom, size_t capacity,
 			  struct poor_damage_rect (*region)[capacity], size_t *count)

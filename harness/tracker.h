@@ -8,8 +8,8 @@
 #include "region.h"
 
 /*
- * The trackers of the library behind one interface, along with two that are wasteful or wrong, to compare them with.
- * Their capacities are chosen at run time: storage is sized for the largest ones, and the library gets views of it.
+ * All trackers of the library behind one interface, plus two simple ones to compare them against. Capacities are
+ * chosen at runtime: the storage is sized for the largest ones, and the library gets views of it.
  */
 
 constexpr size_t TRACKER_MAX_BUFFERS = 8;
@@ -17,19 +17,19 @@ constexpr size_t TRACKER_MAX_FRAMES = 64;
 constexpr size_t TRACKER_MAX_CELLS = 128 * 128;
 
 enum tracker_kind {
-	/* Redraws everything */
+	/* Redraw everything, every frame */
 	TRACKER_WHOLE,
-	/* Redraws only the damage of the frame, which is right while there is one buffer */
+	/* Redraw only the damage of the current frame, which is only correct with a single buffer */
 	TRACKER_NAIVE,
 	TRACKER_BUFFERS,
-	/* With ages of buffers as EGL_EXT_buffer_age counts them */
+	/* Uses buffer ages, counted the way EGL_EXT_buffer_age counts them */
 	TRACKER_HISTORY,
 	TRACKER_MAP,
 };
 
 struct tracker_options {
 	enum tracker_kind kind;
-	/* Rects of each region, frames of the history, cells of the map, and their least size */
+	/* Rects per region, frames in the history, cells in the map, and the smallest cell size */
 	size_t rects, frames, cells;
 	int32_t cell_width, cell_height;
 };
@@ -49,7 +49,7 @@ struct tracker {
 	uint64_t holds[TRACKER_MAX_BUFFERS];
 };
 
-/* Options of the command line that choose a tracker and its capacities, for getopt_long() */
+/* Command line options for choosing a tracker and its capacities, to use with getopt_long() */
 enum tracker_option {
 	TRACKER_OPTION_KIND = 0x100,
 	TRACKER_OPTION_RECTS,
@@ -66,40 +66,43 @@ enum tracker_option {
 	{ "cell-size", required_argument, nullptr, TRACKER_OPTION_CELL_SIZE }
 
 #define TRACKER_USAGE \
-	"  --tracker T   whole, naive, buffers, history or map, buffers by default\n" \
-	"  --rects N     rects of each region, 4 by default, up to 64\n" \
-	"  --history N   frames of the history, 8 by default, up to 64\n" \
-	"  --cells N     cells of the map, 4096 by default, up to 16384\n" \
-	"  --cell-size WxH  the least size of cells, 16x16 by default\n"
+	"  --tracker T   whole, naive, buffers, history or map (default: buffers)\n" \
+	TRACKER_CAPACITY_USAGE
 
-/* Takes the value of an option of TRACKER_LONG_OPTIONS, returns false when it's wrong */
+#define TRACKER_CAPACITY_USAGE \
+	"  --rects N     maximum rects per region, up to 64 (default: 4)\n" \
+	"  --history N   frames kept by the history tracker, up to 64 (default: 8)\n" \
+	"  --cells N     cells of the map, up to 16384 (default: 4096)\n" \
+	"  --cell-size WxH  smallest cell size of the map (default: 16x16)\n"
+
+/* Apply the value of one of TRACKER_LONG_OPTIONS. Returns false if the value is invalid. */
 bool
 tracker_option(struct tracker_options *options, int option, const char *value);
 
-/* 'buffers' buffers of 'width' x 'height' that hold nothing yet */
+/* Initialize the tracker for 'buffers' empty buffers of 'width' x 'height' */
 void
 tracker_init(struct tracker *tracker, const struct tracker_options *options, size_t buffers, int32_t width,
 	     int32_t height);
 
-/* Limits 'damage' to the rects of the tracker, as an application of that capacity would have it */
+/* Reduce 'damage' to the number of rects the tracker allows, as an application with that capacity would */
 void
 tracker_limit(const struct tracker *tracker, region *damage);
 
-/* What to redraw into buffer 'index' for a frame with 'damage' */
+/* Set 'repair' to what has to be redrawn into buffer 'index' for a frame with 'damage' */
 void
 tracker_repair(const struct tracker *tracker, size_t index, const region *damage, region *repair);
 
 void
 tracker_drawn(struct tracker *tracker, size_t index, const region *damage);
 
-/* Buffer 'index' went to the presentation engine, which ages the others */
+/* Call this after buffer 'index' was presented, to age the other buffers */
 void
 tracker_presented(struct tracker *tracker, size_t index);
 
 const char *
 tracker_name(enum tracker_kind kind);
 
-/* Returns false for a name of no tracker */
+/* Find the tracker called 'name'. Returns false if there is none. */
 bool
 tracker_parse(const char *name, enum tracker_kind *kind);
 

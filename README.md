@@ -1,17 +1,25 @@
 # poor_surface_damage
 
-Damage tracking without allocations: what changed on a surface in a few rects, and what each buffer of a swapchain
-lacks, so that only that is redrawn. Three trackers tell what a buffer lacks:
+A small C library for damage tracking. It answers two questions every frame:
 
-- buffers: each buffer holds the damage of the frames that were drawn since its own,
-- history: the damage of the last frames, for a buffer of a known EGL age,
-- map: a raster of the last frame that changed each cell, for a buffer that holds any frame.
+- What changed since the previous frame? This is what you tell the compositor or presentation engine.
+- What does the buffer I'm about to draw into have to redraw? With 2 or 3 buffers in a swapchain, a reused buffer
+  has missed the changes of the frames that went into the other buffers, so it needs those as well.
 
-Every type is declared with the capacities that the application needs, and lives wherever it puts it:
+Damage is kept as a few rects, so redrawing it takes only a few draw calls. There are three ways to track what a
+buffer is missing:
+
+- buffers: every buffer keeps the damage it has missed. Use this when you know which buffer you got, like a Vulkan
+  image index or a wl_buffer.
+- history: the damage of the last few frames. Use this with EGL_EXT_buffer_age.
+- map: a low resolution image of the frame that last changed each part of the surface. This works for buffers of any
+  age, and for anything else that wants to know what changed since frame N.
+
+The library never allocates memory. You declare each type with the capacities you need and put it wherever you like:
 
 ```c
 poor_damage_region_declare(damage_region, 4);           /* up to 4 rects */
-poor_damage_buffers_declare(swapchain_damage, 3, 4);    /* 3 buffers of up to 4 rects */
+poor_damage_buffers_declare(swapchain_damage, 3, 4);    /* 3 buffers, up to 4 rects each */
 
 swapchain_damage tracker;
 damage_region damage = POOR_DAMAGE_REGION_INIT, repair;
@@ -21,20 +29,20 @@ poor_damage_buffers_init(&tracker, width, height);
 poor_damage_region_add(&damage, (struct poor_damage_rect){ x, y, w, h });
 poor_damage_buffers_lacks(&tracker, index, &repair);
 poor_damage_region_add_region(&repair, &damage);
-/* redraw 'repair' into buffer 'index', present it with 'damage' */
+/* redraw 'repair' into buffer 'index', then present it with 'damage' */
 poor_damage_buffers_drawn(&tracker, index, &damage);
 ```
 
-[docs/design.md](docs/design.md) explains the trackers and how to size them, the harness that checks them pixel by
-pixel, and the examples. [docs/research.md](docs/research.md) is how compositors, toolkits, browsers and mobile stacks
-track damage.
+[docs/design.md](docs/design.md) explains the trackers, how to size them, the test harness that checks them pixel by
+pixel, and the examples. [docs/research.md](docs/research.md) describes how compositors, toolkits, browsers and mobile
+platforms track damage.
 
-It needs a C23 compiler, Meson 1.4 and [poor_base](https://github.com/rustedsword/poor_base), installed or from the
-submodule. The examples also need Vulkan, wayland-client, wayland-protocols and glslc.
+Building needs a C23 compiler, Meson 1.4 and [poor_base](https://github.com/rustedsword/poor_base), either installed
+or from the submodule. The examples also need Vulkan, wayland-client, wayland-protocols and glslc.
 
     $ meson setup build/
     $ ninja -C build/
-    $ meson test -C build/                              # --no-suite vulkan without a Vulkan device
+    $ meson test -C build/                              # add --no-suite vulkan if you have no Vulkan device
     $ build/harness/damage-sim --rects 8                # compares the trackers
     $ build/examples/vk-damage --tracker map --flash    # a Vulkan window that tints what it redraws
-    $ build/examples/shm-damage --copy --verify         # a wl_shm window that copies what a buffer lacks
+    $ build/examples/shm-damage --copy --verify         # a wl_shm window that copies what a buffer missed

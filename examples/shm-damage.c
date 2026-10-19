@@ -15,9 +15,10 @@
 #include "xdg-shell-client-protocol.h"
 
 /*
- * Draws the scene into wl_shm buffers that it picks among the ones that the compositor released, redrawing only what
- * a buffer lacks, or copying that from the buffer that was presented last, and redrawing only the damage of the frame.
- * Frames follow frame callbacks, or 100 ms without one, as a window that isn't shown gets none.
+ * A wl_shm client that draws the test scene. It picks a buffer among the ones that the compositor released, and either
+ * redraws what that buffer is missing, or copies it from the last presented buffer and redraws only the damage of the
+ * new frame. A new frame is drawn when a frame callback arrives, or after 100 ms without one, since hidden windows get
+ * no frame callbacks.
  */
 
 constexpr size_t BUFFERS = 4;
@@ -214,7 +215,7 @@ static void init(struct app *app)
 	app->stats = (typeof(app->stats)){};
 }
 
-/* A released buffer, the one presented last or first, or none */
+/* Pick a released buffer: the most recently presented one, or the oldest with --oldest. BUFFERS means none is free. */
 static size_t pick(struct app *app)
 {
 	size_t best = BUFFERS;
@@ -343,13 +344,13 @@ static void wait(struct app *app)
 [[noreturn]] static void usage(const char *name)
 {
 	printerrln("Usage: ", name, " [options]\n\n"
-		   "  --buffers N   buffers to draw into, up to ", BUFFERS, ", 3 by default\n"
-		   "  --copy        copies what a buffer lacks from the one presented last, and draws only the damage\n"
-		   "  --oldest      picks the released buffer presented first rather than last\n"
-		   "  --frames N    frames to draw before quitting, 0 to draw until closed\n"
-		   "  --size WxH    the size, 640x480 by default\n"
-		   "  --seed N      the seed of the scene\n"
-		   "  --verify      checks each frame against one that was drawn whole\n"
+		   "  --buffers N   number of buffers, up to ", BUFFERS, " (default: 3)\n"
+		   "  --copy        copy what a buffer missed from the last presented one, and redraw only new damage\n"
+		   "  --oldest      reuse the oldest released buffer instead of the most recent one\n"
+		   "  --frames N    quit after N frames, 0 to run until the window is closed\n"
+		   "  --size WxH    window size (default: 640x480)\n"
+		   "  --seed N      random seed of the scene\n"
+		   "  --verify      compare every frame with one drawn from scratch\n"
 		   TRACKER_USAGE);
 	exit(EXIT_FAILURE);
 }
@@ -417,8 +418,8 @@ int main(int argc, char *argv[])
 		wait(&app);
 	}
 	if (app.frame)
-		println("shm-damage: ", tracker_name(app.options.tracker.kind), ", ", app.options.buffers, " buffers: ", app.frame,
-			" frames, ", app.options.verify ? "" : "unverified, ", app.stats.wrong, " wrong, ",
+		println("shm-damage: ", tracker_name(app.options.tracker.kind), ", ", app.options.buffers, " buffers: ",
+			app.frame, " frames, ", app.options.verify ? "" : "unverified, ", app.stats.wrong, " wrong, ",
 			fmt_p(100.0 * (double)app.stats.drawn / (double)(app.frame * (uint64_t)app.options.width *
 									  (uint64_t)app.options.height), 2),
 			"% of pixels drawn, ",

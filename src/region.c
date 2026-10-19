@@ -32,7 +32,7 @@ static int64_t area(const struct poor_damage_rect *rect)
 	return (int64_t)rect->width * rect->height;
 }
 
-/* What the bounds of two rects that don't join cover beyond them */
+/* How much undamaged area the bounding box of two separate rects adds */
 static int64_t waste(const struct poor_damage_rect *a, const struct poor_damage_rect *b)
 {
 	struct poor_damage_rect both = bounds(a, b);
@@ -40,7 +40,8 @@ static int64_t waste(const struct poor_damage_rect *a, const struct poor_damage_
 	return area(&both) - area(a) - area(b);
 }
 
-/* Rects that join 'rect' merge into it, as the rects of a region never join each other */
+/* Merge every rect that touches or overlaps 'rect' into it. The rects of a region never touch each other, so only
+ * 'rect' has to be checked. */
 static void absorb(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
 		   struct poor_damage_rect *rect)
 {
@@ -55,7 +56,7 @@ static void absorb(size_t capacity, struct poor_damage_rect (*rects)[capacity], 
 	}
 }
 
-/* Merges the two of the rects and 'rect' whose bounds cover the least that didn't change */
+/* The region is full: merge the two rects, 'rect' included, whose bounding box adds the least undamaged area */
 static void make_room(size_t capacity, struct poor_damage_rect (*rects)[capacity], size_t *count,
 		      struct poor_damage_rect *rect)
 {

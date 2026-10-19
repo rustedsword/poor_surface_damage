@@ -11,7 +11,7 @@ static const char *const names[] = {
 	[TRACKER_HISTORY] = "history", [TRACKER_MAP] = "map",
 };
 
-/* The regions that the tracker keeps, one per buffer or per frame, of its rects */
+/* View the stored regions as 'regions' arrays of the configured number of rects */
 #define make_kept(name, tracker, regions)									\
 	make_arrview_first(name##_counts, regions, (tracker)->counts);						\
 	make_arrview_first(name##_all, (regions) * (tracker)->options.rects, (tracker)->rects);			\

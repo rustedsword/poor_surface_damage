@@ -7,19 +7,19 @@
 #include <stdint.h>
 
 /*
- * A presentation engine that hands buffers back in some order. A buffer stays held for a while once it was presented:
- * one frame when it is on screen until the next one replaces it, none when there is a single buffer, which the engine
- * copies, or a random number of frames.
+ * A fake presentation engine that hands buffers back in a chosen order. A presented buffer stays busy for a while: for
+ * one frame, while it is on screen until the next one replaces it, for no time at all when there is only one buffer,
+ * since the engine then copies it, or for a random number of frames.
  */
 
 constexpr size_t ENGINE_BUFFERS = 4;
 
 enum engine_order {
-	/* The buffer that was presented the longest ago */
+	/* Round robin: the buffer that was presented the longest time ago */
 	ENGINE_FIFO,
-	/* The free buffer that was presented last, as Mesa's EGL picks the one of the least age */
+	/* The free buffer that was presented most recently, like Mesa's EGL, which picks the buffer of the lowest age */
 	ENGINE_NEWEST,
-	/* Any free buffer, after random holds that sometimes last for dozens of frames */
+	/* Any free buffer, after random delays that sometimes last for dozens of frames */
 	ENGINE_RANDOM,
 };
 
@@ -34,7 +34,7 @@ struct engine {
 void
 engine_init(struct engine *engine, enum engine_order order, size_t count, uint32_t seed);
 
-/* A free buffer, or the one that will be freed first */
+/* Pick a free buffer, or the one that gets free first */
 size_t
 engine_acquire(struct engine *engine);
 

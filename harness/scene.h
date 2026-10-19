@@ -8,8 +8,9 @@
 #include "region.h"
 
 /*
- * Boxes over a checkerboard of 16 pixel cells: they bounce, blink, grow and change colors, and now and then the board
- * changes colors. A step to the next frame tells what changed. Boxes that come later are drawn over earlier ones.
+ * A test scene: boxes over a checkerboard of 16 pixel squares. Some boxes bounce around, some blink, some grow like
+ * progress bars, and some change colors. Every 240 frames the whole checkerboard changes colors. scene_step() moves to
+ * the next frame and adds what changed to the damage. Boxes are drawn in order, later ones on top.
  */
 
 constexpr size_t SCENE_BOXES = 12;
@@ -36,14 +37,14 @@ struct scene {
 void
 scene_init(struct scene *scene, int32_t width, int32_t height, uint32_t seed);
 
-/* Boxes keep within the new size, and everything changes */
+/* Resize the scene: the boxes are placed again within the new size, and the whole surface is damaged */
 void
 scene_resize(struct scene *scene, int32_t width, int32_t height, region *damage);
 
 void
 scene_step(struct scene *scene, region *damage);
 
-/* Draws what lies within 'clip' into 'pixels' of the scene's size */
+/* Draw the part of the scene inside 'clip' into 'pixels', which has the size of the scene */
 void
 scene_draw_impl(const struct scene *scene, size_t height, size_t width, uint32_t (*pixels)[height][width],
 		struct poor_damage_rect clip);

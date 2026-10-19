@@ -53,7 +53,7 @@ if get_option('tests')
 					'--resize', '97', '--verify' ],
 				suite: 'vulkan',
 				timeout: 120,
-				# Drivers leak from modules that they unload, which sanitizers can't tell from leaks of their own
+				# Vulkan drivers leak in libraries they unload, which LeakSanitizer can't tell apart from real leaks
 				env: [ 'ASAN_OPTIONS=detect_leaks=0:halt_on_error=1:abort_on_error=1' ],
 			)
 		endforeach

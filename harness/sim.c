@@ -49,7 +49,7 @@ static uint64_t area(const region *covered)
 	return pixels;
 }
 
-/* New buffers of a new size, which hold garbage */
+/* Replace all buffers with new ones of the given size, filled with garbage */
 static void recreate(struct sim *sim, int32_t width, int32_t height)
 {
 	sim->width = width;
@@ -63,7 +63,7 @@ static void recreate(struct sim *sim, int32_t width, int32_t height)
 	tracker_init(&sim->tracker, &sim->options->tracker, sim->options->buffers, width, height);
 }
 
-/* The pixels that a buffer lacks of the exact union of the damage of the frames that were drawn since its own */
+/* Count the pixels in the exact union of all the damage that buffer 'index' missed, including 'damage' */
 static uint64_t exact(struct sim *sim, size_t index, const region *damage)
 {
 	uint64_t pixels = 0;

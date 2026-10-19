@@ -17,9 +17,9 @@
 #include "xdg-shell-client-protocol.h"
 
 /*
- * Draws the scene with Vulkan, redrawing only what the acquired image lacks: into a Wayland window, into a headless
- * swapchain, or into images that the engine of the harness hands out. Each frame can be checked against a frame that
- * was drawn whole, and the window can flash what was redrawn.
+ * Draws the test scene with Vulkan, redrawing only what the acquired image is missing. It draws into a Wayland window,
+ * a headless swapchain, or offscreen images that the harness engine hands out. With --verify every frame is compared
+ * with a frame drawn from scratch, and --flash tints what was redrawn.
  */
 
 static const uint32_t vertex_code[] =
@@ -241,7 +241,7 @@ static bool has_extension(VkPhysicalDevice physical, const char *name)
 	return false;
 }
 
-/* A device of Vulkan 1.3 with a graphics queue that can present to the window, preferably not a CPU */
+/* Whether the device supports Vulkan 1.3 and has a graphics queue that can present to our surface */
 static bool suitable(struct app *app, VkPhysicalDevice physical, uint32_t *family)
 {
 	VkPhysicalDeviceProperties properties;
@@ -574,7 +574,7 @@ static void create_swapchain(struct app *app)
 		.preTransform = capabilities.currentTransform,
 		.compositeAlpha = (VkCompositeAlphaFlagBitsKHR)alpha,
 		.presentMode = present,
-		/* Pixels that others cover must keep what was drawn, as images are repaired, not redrawn */
+		/* Keep pixels that other windows cover: images are repaired, not redrawn from scratch */
 		.clipped = VK_FALSE,
 		.oldSwapchain = old,
 	}, nullptr, &app->swapchain));
@@ -619,7 +619,7 @@ static void create_readback(struct app *app)
 	app->mapped = mapped;
 }
 
-/* Images that hold nothing yet, and a scene of their size */
+/* Create new, empty images or a new swapchain, and resize the scene to match */
 static void create_targets(struct app *app)
 {
 	region everything;
@@ -731,7 +731,7 @@ static uint64_t area(const region *region)
 	return pixels;
 }
 
-/* Draws the scene within 'region' only, on top of what the image holds */
+/* Draw the scene into 'image' inside 'region' only, keeping the rest of the image as it is */
 static void draw(struct app *app, VkCommandBuffer command, struct image *image, const region *region,
 		 bool flash)
 {
@@ -839,7 +839,7 @@ static void submit(struct app *app, size_t slot, struct image *image)
 	}, app->fences[slot]));
 }
 
-/* Tells what changed since the last frame, and an empty rect when nothing did, as no rects would mean everything */
+/* Present with the damage of this frame. Pass one empty rect if nothing changed, since no rects means everything. */
 static void present(struct app *app, uint32_t index, const region *damage)
 {
 	VkRectLayerKHR rects[REGION_RECTS] = { { .extent = { 0, 0 } } };
@@ -944,7 +944,7 @@ static void frame(struct app *app)
 		report(app);
 }
 
-/* Every 'resize' frames the size switches between the one of the options and a smaller one */
+/* With --resize, switch between the requested size and a smaller one every few frames */
 static void resize(struct app *app)
 {
 	bool smaller = app->configured_width == app->options.width;
@@ -986,17 +986,17 @@ static void finish(struct app *app)
 [[noreturn]] static void usage(const char *name)
 {
 	printerrln("Usage: ", name, " [options]\n\n"
-		   "  --target wayland|headless|offscreen  where to draw, a window by default\n"
-		   "  --images N        images to ask the swapchain for, or of the offscreen target, 3 by default there\n"
-		   "  --order fifo|newest|random  how the offscreen target hands images out, random by default\n"
-		   "  --present fifo|mailbox|immediate  the present mode, fifo by default\n"
-		   "  --frames N        frames to draw before quitting, 0 to draw until closed\n"
-		   "  --resize N        switches to a smaller size and back every N frames\n"
-		   "  --size WxH        the size, 640x480 by default\n"
-		   "  --seed N          the seed of the scene\n"
-		   "  --device N        the index of the Vulkan device to use\n"
-		   "  --verify          checks each frame against one that was drawn whole\n"
-		   "  --flash           tints what was redrawn\n"
+		   "  --target wayland|headless|offscreen  where to draw (default: wayland)\n"
+		   "  --images N        number of swapchain or offscreen images (default: 3 offscreen)\n"
+		   "  --order fifo|newest|random  order in which the offscreen target hands out images (default: random)\n"
+		   "  --present fifo|mailbox|immediate  present mode (default: fifo)\n"
+		   "  --frames N        quit after N frames, 0 to run until the window is closed\n"
+		   "  --resize N        switch to a smaller size and back every N frames\n"
+		   "  --size WxH        surface size (default: 640x480)\n"
+		   "  --seed N          random seed of the scene\n"
+		   "  --device N        index of the Vulkan device to use\n"
+		   "  --verify          compare every frame with one drawn from scratch\n"
+		   "  --flash           tint what was redrawn\n"
 		   TRACKER_USAGE);
 	exit(EXIT_FAILURE);
 }

@@ -10,15 +10,21 @@
 [[noreturn]] static void usage(const char *name)
 {
 	printerrln("Usage: ", name, " [options]\n\n"
-		   "Runs every tracker, or one, over every order of the engine and 1 to ", ENGINE_BUFFERS, " buffers, and\n"
-		   "tells how many frames went wrong, how many redrew everything, the part of the pixels that was redrawn,\n"
-		   "how many times more than the exact union of the damage that buffers lacked, and than the pixels that\n"
-		   "differed, the rects per frame and the time that the tracker took per frame.\n\n"
-		   "  --width W, --height H  the size, 640 x 480 by default, up to ", SIM_WIDTH, " x ", SIM_HEIGHT, "\n"
-		   "  --frames N    frames to draw, 2000 by default\n"
-		   "  --resize N    changes the size every N frames\n"
-		   "  --seed N      the seed of the scene\n"
-		   TRACKER_USAGE);
+		   "Simulates every tracker, or just one, with every buffer order of the engine and 1 to ", ENGINE_BUFFERS,
+		   " buffers.\nFor each run it prints:\n"
+		   "  wrong    frames that came out wrong\n"
+		   "  whole    frames that redrew everything\n"
+		   "  redrawn  share of the pixels that were redrawn\n"
+		   "  /exact   redrawn pixels compared to the exact union of the damage that buffers missed\n"
+		   "  /needed  redrawn pixels compared to the pixels that actually changed\n"
+		   "  rects    rects per frame\n"
+		   "  ns       time spent in the tracker per frame\n\n"
+		   "  --width W, --height H  surface size, up to ", SIM_WIDTH, "x", SIM_HEIGHT, " (default: 640x480)\n"
+		   "  --frames N    number of frames (default: 2000)\n"
+		   "  --resize N    change the surface size every N frames\n"
+		   "  --seed N      random seed of the scene\n"
+		   "  --tracker T   run only this tracker: whole, naive, buffers, history or map\n"
+		   TRACKER_CAPACITY_USAGE);
 	exit(EXIT_FAILURE);
 }
 

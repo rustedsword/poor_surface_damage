@@ -1,57 +1,58 @@
-# poor_surface_damage: algorithms, harness and examples
+# poor_surface_damage: design, test harness and examples
 
-What the library does, how it is checked, and what it costs. Research on how others do it is in
-[research.md](research.md).
+This document explains what the library does, how it is tested, and what it costs. How other projects handle damage
+is covered in [research.md](research.md).
 
 ## Two kinds of damage
 
-A frame has two regions, and mixing them up is the most common mistake (see GTK in the research):
+Every frame deals with two different regions, and confusing them is the most common mistake (GTK does it, see the
+research):
 
-- **Frame damage**: what changed since the previous frame. It goes to the presentation engine:
-  `wl_surface.damage_buffer`, `VkPresentRegionsKHR`, `eglSwapBuffersWithDamage`, DXGI dirty rects.
-- **Repair**: what the buffer about to be drawn lacks. It is the frame damage plus the damage of every frame drawn since
-  the frame that buffer holds. It is what gets redrawn (scissors, clip, `eglSetDamageRegionKHR`, render area).
+- **Frame damage** is what changed since the previous frame. This is what you send to the compositor or presentation
+  engine: `wl_surface.damage_buffer`, `VkPresentRegionsKHR`, `eglSwapBuffersWithDamage` or DXGI dirty rects.
+- **Repair** is what you have to redraw into the buffer you are about to draw into: the frame damage, plus the damage
+  of every frame that went into other buffers since this one was last used. This is what you redraw, with scissors, a
+  clip, `eglSetDamageRegionKHR` or a render area.
 
-With one buffer whose content is kept (beam racing, a copying compositor), the two are equal and no tracker is needed.
-With N buffers they differ, and redrawing only the frame damage leaves stale pixels. The `naive` tracker in the harness
-does exactly that, and the harness catches it on every frame.
+With a single buffer that keeps its contents (beam racing, or a compositor that copies the buffer) the two are the
+same and no tracker is needed. With more buffers they differ, and redrawing only the frame damage leaves stale pixels
+behind. The harness has a `naive` tracker that does exactly that, and it catches the mistake on every frame.
 
-Every frame of an application does the same thing whatever the tracker:
+The frame loop looks the same with every tracker:
 
 ```
-damage   = what the application changed (old and new bounds of what moved), clipped to the surface
-buffer   = acquire()                  // the WSI picks it (Vulkan), or the client does (wl_shm, EGL)
-repair   = lacks(buffer) ∪ damage
-draw the scene within repair, keeping everything else (LOAD_OP_LOAD, oldLayout PRESENT_SRC_KHR)
+damage = what the application changed (old and new bounds of whatever moved), clipped to the surface
+buffer = acquire()                  // picked by the WSI (Vulkan), or by the client (wl_shm, EGL)
+repair = missed(buffer) ∪ damage
+draw the scene inside repair, keep everything else (LOAD_OP_LOAD, oldLayout PRESENT_SRC_KHR)
 drawn(buffer, damage)
-present(buffer, damage)               // the frame damage, not the repair
+present(buffer, damage)             // the frame damage, not the repair
 ```
 
 ## Layout
 
-One header and one source per module, following poor_loop:
+One header and one source file per module, like poor_loop:
 
-| Header | Source | What |
+| Header | Source | Contents |
 |---|---|---|
 | `poor_damage_region.h` | `region.c` | rects and regions |
-| `poor_damage_surface.h` | — | size and frame counter shared by trackers, EGL ages |
-| `poor_damage_buffers.h` | `buffers.c` | what each buffer lacks |
-| `poor_damage_history.h` | `history.c` | damage of the last frames |
-| `poor_damage_map.h` | `map.c` | raster of the last frame that changed each cell |
-| `poor_surface_damage.h` | — | includes all of them |
+| `poor_damage_surface.h` | — | surface size and frame counter shared by the trackers, buffer ages |
+| `poor_damage_buffers.h` | `buffers.c` | the damage that each buffer is missing |
+| `poor_damage_history.h` | `history.c` | the damage of the last few frames |
+| `poor_damage_map.h` | `map.c` | a low resolution image of the frame that last changed each cell |
+| `poor_surface_damage.h` | — | includes all of the above |
 
-## Capacities belong to the application
+## The application decides the capacities
 
-Nothing has a fixed size. Each type is declared with the capacities the application needs, like poor_loop's groups,
-and lives wherever the application puts it: on the stack, in a static, or inside its own structs. The map doesn't even
-hold its raster: the raster is an array in one of the application's structs, where it can share memory with anything
-else, and the map lives in the same struct and finds it there, like a list finds its items from their links in
-poor_list.
+Nothing has a fixed size. You declare each type with the capacities you need, the same way poor_loop declares its
+groups, and put it anywhere: on the stack, in a static variable, or inside your own structs. The map doesn't even own
+its cells: they are an array in one of your structs, where they can share memory with anything else. The map lives in
+the same struct and finds the array there, just like poor_list finds items from their links.
 
 ```c
 poor_damage_region_declare(damage_region, 4);           /* up to 4 rects */
-poor_damage_buffers_declare(swapchain_damage, 3, 4);    /* 3 buffers, 4 rects each */
-poor_damage_history_declare(frame_damage, 8, 4);        /* 8 frames, 4 rects each */
+poor_damage_buffers_declare(swapchain_damage, 3, 4);    /* 3 buffers, up to 4 rects each */
+poor_damage_history_declare(frame_damage, 8, 4);        /* 8 frames, up to 4 rects each */
 poor_damage_map_declare(screen_map);
 
 struct screen {
@@ -62,59 +63,61 @@ struct screen {
 poor_damage_map_attach_buffer(screen_map, struct screen, map, cells);
 ```
 
-- The macros take the capacities from the array sizes, with poor_base's `ARRAY_SIZE`.
-- They pass the arrays to `_impl` functions as pointers to variable length arrays.
-- Regions of different capacities mix freely. A tracker can store 4 rects per buffer and answer into a repair region of
-  16 rects.
-- Capacities that are only known at run time use the `_impl` functions directly, with `arrview` views of storage sized
-  for the largest case. The harness does this: `--rects`, `--history`, `--cells` and `--cell-size` pick capacities per run.
-- Trailing macro arguments are variadic, so `poor_damage_region_add(&r, (struct poor_damage_rect){ x, y, w, h })` works.
+- The macros take the capacities from the array sizes with poor_base's `ARRAY_SIZE`, and pass the arrays to the
+  `_impl` functions as pointers to variable length arrays.
+- Regions of different capacities can be mixed. A tracker can keep 4 rects per buffer and still fill a repair region
+  of 16 rects.
+- If the capacities are only known at runtime, call the `_impl` functions directly with `arrview` views of storage
+  that is big enough for the largest case. The harness does this, which is how `--rects`, `--history`, `--cells` and
+  `--cell-size` choose capacities per run.
+- The last argument of the macros is variadic, so `poor_damage_region_add(&r, (struct poor_damage_rect){ x, y, w, h })`
+  works.
 - The macros may evaluate the tracker or region argument more than once.
-- Following AGENTS.md:
-  - `POOR_DAMAGE_REGION_INIT` and `POOR_DAMAGE_HISTORY_INIT(w, h)` set only what is required.
-  - The init functions do the same.
-  - Buffers and the map only have init functions, since their initial state depends on capacities.
-- Attaching a buffer checks at compile time that the map member is of its type and that the buffer is an array of
-  `uint64_t`, or of arrays of them. A map finds its buffer by the offsets of both in the struct, so it holds no
-  pointer, and it only works inside that struct.
+- As AGENTS.md asks, `POOR_DAMAGE_REGION_INIT`, `POOR_DAMAGE_HISTORY_INIT(w, h)` and the init functions set only the
+  fields that need it. Buffers and maps only have init functions, because their initial state depends on the
+  capacities.
+- `poor_damage_map_attach_buffer()` checks at compile time that the map member has the right type and that the cells
+  are an array of `uint64_t`, or an array of arrays of them. The map finds its cells by their offset in the struct, so
+  it holds no pointer, but it only works inside that struct.
 
 ## Region
 
-A region holds up to its capacity of rects:
+A region holds a limited number of rects:
 
-- Rects that overlap or share an edge merge into their bounds.
-- When the region is full, the two rects (the new one included) whose bounds cover the fewest pixels that didn't change
-  merge, and the merged rect takes in any rect it now reaches.
-- So the rects stay disjoint, and a repair costs at most *capacity* scissored passes.
-- Adding a rect costs O(n) while there is room and O(n²) when the region is full.
-- `poor_damage_region_clip()` keeps what lies within the surface. Vulkan scissors and present rects must not go outside
-  the image.
-- Edges are computed in 64 bits, so the Wayland idiom of `INT32_MAX`-sized damage is safe.
+- Rects that overlap or share an edge are merged into their bounding box.
+- When the region is full, the two rects (the new one included) whose bounding box adds the least undamaged area are
+  merged, and the result absorbs any rect it now touches.
+- So the rects never overlap, and redrawing a region takes at most as many scissored passes as its capacity.
+- Adding a rect costs O(n) while there is room, and O(n²) once the region is full.
+- `poor_damage_region_clip()` cuts the rects to the surface. Vulkan scissors and present rects must stay inside the
+  image.
+- Edges are computed with 64 bits, so the Wayland habit of damaging `INT32_MAX`-sized rects is safe.
 
-How many rects to keep is the main trade-off. With 3 buffers at 640×480 in the harness's scene (12 boxes), the share of
-pixels redrawn per frame is:
+The number of rects is the main trade-off. With 3 buffers at 640×480 and the harness scene (12 boxes), this is the
+share of pixels redrawn per frame:
 
 | Rects | 1 (bounding box) | 2 | 4 | 8 | 16 | 64 |
 |---|---|---|---|---|---|---|
 | redrawn | 53.0% | 29.1% | 7.8% | 3.3% | 3.3% | 3.3% |
 
-A single rect, which Chromium, WebRender, HWUI and Flutter all use, repaints everything between far-apart changes. A
-handful of rects removes most of that. Past the number of separate things that change, more rects buy nothing.
+A single rect, which Chromium, WebRender, HWUI and Flutter all use, repaints everything between two changes that are
+far apart. A few rects avoid most of that. Once there are as many rects as separate things that change, more rects
+don't help.
 
 ## Trackers
 
-All three answer "what does buffer *i* lack". They differ in what they remember and in how far back they reach.
+All three tell you what buffer *i* is missing. They differ in what they store and in how far back they can look.
 
-| Tracker | State | `drawn()` | `lacks()` | Reaches back |
+| Tracker | Stores | `drawn()` | `lacks()` | Looks back |
 |---|---|---|---|---|
-| buffers | a region per buffer | union into every other buffer, O(buffers) | copy one region | forever, any order |
-| history | a region per frame | store one region | union of age−1 regions | its frames, then everything |
-| map | the last frame that changed each cell | stamp cells | scan the raster | forever, any order |
+| buffers | a region per buffer | adds the damage to every other buffer, O(buffers) | copies one region | forever, in any order |
+| history | a region per frame | stores one region | unions the last age−1 regions | as many frames as it keeps |
+| map | the last frame that changed each cell | stamps the damaged cells | scans the cells | forever, in any order |
 
 ### buffers
 
-This is the scheme of GTK (Vulkan, Wayland SHM), Chromium (BufferQueue, SkiaOutputDeviceVulkan), Weston 13+, Flutter
-Metal and Qt's raster backing stores. It needs the identity of the buffer: a Vulkan image index, a `wl_buffer`, a GBM
+This is what GTK (Vulkan, Wayland SHM), Chromium (BufferQueue, SkiaOutputDeviceVulkan), Weston 13+, Flutter on Metal
+and Qt's raster backing stores do. You need to know which buffer you got: a Vulkan image index, a `wl_buffer` or a GBM
 bo.
 
 ```c
@@ -129,15 +132,17 @@ poor_damage_region_add_region(&repair, &damage);
 poor_damage_buffers_drawn(&tracker, index, &damage);
 ```
 
-`poor_damage_buffers_forget()` marks a single buffer that was recreated.
+`poor_damage_buffers_forget()` marks a single buffer as empty, for example after it was recreated.
 
 ### history
 
-This is the EGL_EXT_buffer_age scheme of KWin, Mutter, GTK (GL), Weston ≤ 12, wlroots ≤ 0.18, HWUI and WebRender.
-- Frames are numbered from 1, and a buffer is known by the number of the frame it holds (0: nothing).
-- For an EGL age, `poor_damage_frame_of_age(&history, age)` gives that number.
-- Applications that know which buffer they got can store the number that `drawn()` returns. KWin and Mesa compute ages
-  that way: the buffer that was swapped gets age 1, and every other buffer that has an age gets one more.
+This is the EGL_EXT_buffer_age approach used by KWin, Mutter, GTK (GL), Weston up to 12, wlroots up to 0.18, HWUI and
+WebRender.
+
+- Frames are numbered from 1, and a buffer is described by the number of the frame it holds (0 means none).
+- `poor_damage_frame_of_age(&history, age)` turns an EGL buffer age into that number.
+- If you know which buffer you got, you can store the frame number that `drawn()` returns instead. KWin and Mesa count
+  ages the same way: the buffer that was just swapped gets age 1, and every other buffer that has an age gets one more.
 
 ```c
 frame_damage history = POOR_DAMAGE_HISTORY_INIT(width, height);
@@ -148,33 +153,34 @@ poor_damage_region_add_region(&repair, &damage);
 poor_damage_history_drawn(&history, &damage);
 ```
 
-A buffer older than the history gets a whole redraw. That happens when a compositor holds a buffer for long, or with
-Mesa's headless WSI, which hands out images 0,1,0,2,0,1,0,3. With buffers released in random order, the history length
-matters:
+A buffer that is older than the history is redrawn completely. That happens when the compositor holds on to a buffer
+for a long time, or with Mesa's headless WSI, which hands out images in the order 0, 1, 0, 2, 0, 1, 0, 3. When buffers
+come back in random order, the length of the history matters:
 
-| Frames | 2 | 4 | 8 | 16 | (buffers tracker) |
+| Frames kept | 2 | 4 | 8 | 16 | buffers tracker |
 |---|---|---|---|---|---|
-| 3 buffers: redrawn, frames redrawn whole | 23.8%, 20.2% | 14.5%, 9.9% | 11.2%, 6.2% | 9.1%, 3.6% | 7.7% |
+| 3 buffers: redrawn, frames redrawn completely | 23.8%, 20.2% | 14.5%, 9.9% | 11.2%, 6.2% | 9.1%, 3.6% | 7.7% |
 | 4 buffers | 48.9%, 46.2% | 21.8%, 16.6% | 12.7%, 5.9% | 10.9%, 3.7% | 9.6% |
 
 ### map
 
-Damage is drawn into a raster the way rendering draws into a texture, except that cells hold the number of the frame
-that last changed them rather than colors. "What changed since frame N" is then every cell above N.
-- It works for any N, any buffer order and any number of buffers.
-- It also serves consumers that are not buffers at all, such as a screencast or VNC client that last saw frame N.
-- Keeping only the latest frame per cell is what lets it reach back forever in fixed memory.
-- The raster is only a budget of cells, and `init` shapes it after the surface. It asks for a least cell size, and
-  cells grow by a common multiple of it until they fit the budget. 2304 cells of 64 pixels cover 1920×1080 in 30×17
-  and 8000×500 in 125×8, while 1500×15000 gets 12×118 cells of 128. A shape fixed at compile time would instead waste
-  most cells on wide or tall surfaces.
-- One cell per pixel would be exact. Larger cells are only a trade of precision for memory and time.
-- Rows that changed the same cells merge into bands before they become rects.
-- Answers are whole cells.
+Think of the map as a texture that damage is drawn into, except that each cell stores the number of the frame that
+last changed it instead of a color. What changed since frame N is then every cell with a number above N.
+
+- This works for any N, any order of buffers and any number of buffers.
+- It also works for things that aren't buffers, such as a screencast or VNC client that last saw frame N.
+- Because each cell keeps only the latest frame, the map can look back forever with fixed memory.
+- The array of cells is just a budget, and `init` picks a layout that fits the surface. You ask for a minimum cell
+  size, and the cells are scaled up by the same factor in both directions until they fit into the budget. 2304 cells
+  of 64 pixels cover 1920×1080 as 30×17 cells, and 8000×500 as 125×8 cells, while 1500×15000 gets 12×118 cells of 128
+  pixels. A layout fixed at compile time would waste most of the cells on very wide or very tall surfaces.
+- With one cell per pixel the map would be exact. Bigger cells simply trade precision for memory and speed.
+- Rows with the same changed cells are merged into bands before they are turned into rects.
+- The answer is always made of whole cells.
 
 ```c
 struct screen screen;
-uint64_t holds[3] = {};                                  /* the frame each buffer holds */
+uint64_t holds[3] = {};                                  /* the frame that each buffer holds */
 
 poor_damage_map_init(&screen.map, width, height, 64, 64);
 ...
@@ -184,78 +190,78 @@ poor_damage_region_add_region(&repair, &damage);
 holds[index] = poor_damage_map_drawn(&screen.map, &damage);
 ```
 
-Cell size trades precision for time (3 buffers, 640×480, a budget of 16384 cells):
+Cell size trades precision for speed (3 buffers, 640×480, a budget of 16384 cells):
 
-| Least cell | 1 px | 8 px | 16 px | 32 px | 64 px |
+| Minimum cell | 1 px | 8 px | 16 px | 32 px | 64 px |
 |---|---|---|---|---|---|
 | redrawn | 8.2% | 8.7% | 9.8% | 13.1% | 22.7% |
-| ÷ exact union | 1.26 | 1.33 | 1.50 | 2.01 | 3.48 |
+| compared to the exact union | 1.26 | 1.33 | 1.50 | 2.01 | 3.48 |
 | µs per frame | 13.1 | 5.8 | 2.3 | 1.3 | 0.9 |
 
 ### Sizing for a use case
 
 | Case | Declaration | Bytes |
 |---|---|---|
-| beam racing, one buffer that is presented and kept | only a region: repair = damage | 72 |
-| desktop window, triple buffering | `poor_damage_buffers_declare(t, 3, 4)` | 232 |
-| EGL with buffer age | `poor_damage_history_declare(h, 4, 4)` (ages up to 5) | 304 |
-| 4K output, consumers asking "since frame N" | a map over `uint64_t cells[2304]`, 64 px cells | 18472 |
+| beam racing: one buffer that is presented and kept | just a region, since the repair is the damage | 72 |
+| desktop window with triple buffering | `poor_damage_buffers_declare(t, 3, 4)` | 232 |
+| EGL with buffer age | `poor_damage_history_declare(h, 4, 4)`, for ages up to 5 | 304 |
+| 4K output with consumers asking what changed since frame N | a map over `uint64_t cells[2304]`, 64 px cells | 18472 |
 | text editor stretched in VR, 1500×15000 | a map over `uint64_t cells[5760]`, 64 px cells | 46120 |
-| SQL result of many columns, 8000×500 | a map over `uint64_t cells[1024]`, 64 px cells | 8232 |
+| SQL result with many columns, 8000×500 | a map over `uint64_t cells[1024]`, 64 px cells | 8232 |
 
-Huge surfaces with few, local changes also suit `buffers` with 8–16 rects. It costs a few hundred bytes and repairs
-exactly, at the price of merging rects when the damage scatters.
+Huge surfaces where only a few small areas change also work well with `buffers` and 8–16 rects. That costs a few
+hundred bytes and repairs exactly, but rects get merged when the damage is spread out.
 
 ### When buffers are recreated
 
-On resize, or a new swapchain or pool:
+After a resize, or with a new swapchain or buffer pool:
 
-- `buffers`: init again, or `forget()` the buffers that changed.
-- `history` and `map`: init again, and set every buffer's frame back to 0.
-- The first frame damages everything. The presentation engine has nothing yet, and Mutter even redraws the first 3
-  frames whole because of junk from drivers.
+- `buffers`: call init again, or `forget()` the buffers that were recreated.
+- `history` and `map`: call init again, and reset the frame of every buffer to 0.
+- Damage everything in the first frame. The presentation engine has nothing to show yet, and Mutter even redraws the
+  first 3 frames completely because some drivers produce garbage at first.
 
-### Which one
+### Which tracker to use
 
-- **The buffer is known** (Vulkan, wl_shm, GBM): `buffers`. It is simplest and exact for any order and any age.
-- **Only an EGL age is known**: `history`, as long as the age stays within its frames.
-- **Consumers ask "since frame N" for arbitrary N, or there are many buffers**: `map`.
-- **Picking the buffer yourself** (wl_shm, EGL on Mesa): take the free buffer that was presented last. In the
-  simulation, the freshest-first order (`newest`) of 4 buffers redraws 5.5% of the pixels against 9.2% for FIFO.
-  `shm-damage` on KWin shows the same: 5.3% against 8.8%. Mesa's EGL and Qt pick buffers this way.
+- **You know which buffer you got** (Vulkan, wl_shm, GBM): `buffers`. It is the simplest, and exact for any order and
+  any age.
+- **You only know the EGL buffer age**: `history`, as long as ages stay within the number of frames it keeps.
+- **Something asks what changed since frame N for any N, or there are many buffers**: `map`.
+- **You pick the buffer yourself** (wl_shm, EGL on Mesa): take the free buffer that was presented most recently. In
+  the simulation, taking the newest buffer first with 4 buffers redraws 5.5% of the pixels against 9.2% in FIFO order,
+  and `shm-damage` on KWin shows the same: 5.3% against 8.8%. Mesa's EGL and Qt pick buffers this way.
 
-## Harness
+## Test harness
 
-`harness/` holds what the tests and the examples share:
+`harness/` contains the code shared by the tests and the examples:
 
-- `scene`: boxes over a 16-pixel checkerboard that bounce, blink, grow and change color. Every 240 frames the board
-  changes colors, which damages everything. Each step reports its damage: the old and new bounds of what moved, or the
-  strip a bar grew by.
-- `engine`: a presentation engine with three orders of handing buffers back:
-  - `fifo`: round robin.
-  - `newest`: the freshest released buffer, as Mesa's EGL does.
-  - `random`: holds of random length that sometimes last 4–27 frames.
-- `tracker`: the library's trackers behind one interface, plus `whole` (redraw everything) and `naive` (redraw only the
-  frame damage). Their capacities are picked at run time: storage is sized for the largest, and the library gets views
-  of it.
-- `sim`: draws every frame into the engine's buffers, redrawing only the repair. It then compares the buffer with a
-  frame drawn whole. Buffers start as garbage and the surface can be resized every N frames.
+- `scene`: boxes over a checkerboard of 16 pixel squares that bounce, blink, grow and change colors. Every 240 frames
+  the checkerboard changes colors, which damages the whole surface. Each step reports its damage: the old and new
+  bounds of whatever moved, or the strip a progress bar grew by.
+- `engine`: a fake presentation engine that hands buffers back in one of three orders:
+  - `fifo`: round robin,
+  - `newest`: the most recently presented free buffer, like Mesa's EGL,
+  - `random`: buffers are held for random times, sometimes for 4–27 frames.
+- `tracker`: the library's trackers behind one interface, plus `whole` (redraw everything) and `naive` (redraw only
+  the frame damage). Capacities are chosen at runtime: the storage is sized for the largest ones, and the library gets
+  views of it.
+- `sim`: draws every frame into the engine's buffers, redrawing only the repair, and compares the result with a frame
+  drawn from scratch. Buffers start out with garbage, and the surface can be resized every N frames.
 
-`tests/sim-test` runs every tracker over every order and 1–4 buffers with resizes, and also extreme capacities. It
-checks:
+`tests/sim-test` runs every tracker with every buffer order and 1–4 buffers, with resizes, and with extreme
+capacities: regions of 1 rect, a history of 1 frame, maps of 1 and 16384 cells, and cells of 7×2 pixels. It checks
+that:
 
-- no frame is ever wrong,
-- every repair covers the exact union of the damage the buffer lacked,
-- `naive` is caught with 2 buffers and is right with 1,
+- no frame ever comes out wrong,
+- every repair covers the exact union of the damage that the buffer missed,
+- `naive` fails with 2 buffers and works with 1,
 - more rects redraw less.
 
-The extreme capacities include 1-rect regions, a 1-frame history, maps of 1 and 16384 cells, and 7×2 cells.
+`damage-sim` prints the full comparison and accepts the capacity options. By default it runs 640×480 for 2000 frames.
+The table below is for 3 buffers. *redrawn* is the share of pixels that were redrawn, */exact* compares the repair with
+the exact union of the damage the buffer missed, and *µs* is the time spent in the tracker per frame.
 
-`damage-sim` prints the whole comparison and takes the capacity options. The default run is 640×480 over 2000 frames.
-The table below uses 3 buffers. *redrawn* is the share of pixels that were redrawn. */exact* compares the repair with
-the exact union of the damage that the buffer lacked. *µs* is the time the tracker took per frame.
-
-| Tracker | fifo redrawn | newest redrawn | random redrawn | random: frames redrawn whole | /exact (fifo) | µs |
+| Tracker | fifo | newest | random | random: frames redrawn completely | /exact (fifo) | µs |
 |---|---|---|---|---|---|---|
 | whole | 100% | 100% | 100% | 100% | 15.9 | 0.1 |
 | naive | wrong | wrong | wrong | — | — | 0.2 |
@@ -263,82 +269,85 @@ the exact union of the damage that the buffer lacked. *µs* is the time the trac
 | history | 7.34% | 5.53% | 10.74% | 6.1% | 1.16 | 0.5–0.7 |
 | map | 9.36% | 7.33% | 8.50% | 1.4% | 1.48 | 2.2–2.4 |
 
-With 1 buffer every tracker redraws 3.55%, exactly the frame damage. With 4 buffers in random order, `history` redraws
-12.3% against 9.0% for `buffers`, because old buffers fall back to whole redraws. The repair is about 3–4 times the
-pixels that actually differ, and the cause is the rect damage itself (the old and new bounds of a moving box), not the
-trackers.
+With 1 buffer every tracker redraws 3.55%, which is exactly the frame damage. With 4 buffers in random order,
+`history` redraws 12.3% against 9.0% for `buffers`, because buffers older than the history are redrawn completely. All
+trackers redraw about 3–4 times more pixels than actually changed, but that comes from rect damage itself (the old and
+new bounds of a moving box), not from the trackers.
 
 ## Examples
 
-Both examples are built when Vulkan, wayland-client, wayland-protocols, wayland-scanner and glslc are found
-(`-Dexamples=auto`). Both take the harness's `--tracker`, `--rects`, `--history`, `--cells` and `--cell-size` options.
+Both examples are built if Vulkan, wayland-client, wayland-protocols, wayland-scanner and glslc are found
+(`-Dexamples=auto`). Both accept the harness options `--tracker`, `--rects`, `--history`, `--cells` and
+`--cell-size`.
 
 ### vk-damage
 
-Draws the scene with Vulkan 1.3, using dynamic rendering and synchronization2. Targets:
+Draws the scene with Vulkan 1.3, using dynamic rendering and synchronization2, into one of these targets:
 
-- `wayland`: an xdg-shell window.
-- `headless`: `VK_EXT_headless_surface`, a real WSI with no display.
-- `offscreen`: images that the harness engine hands out in any order.
+- `wayland`: an xdg-shell window,
+- `headless`: a real swapchain without a display, through `VK_EXT_headless_surface`,
+- `offscreen`: images handed out by the harness engine in any order.
 
-Repairing a swapchain image relies on rules the Vulkan spec guarantees:
+Repairing swapchain images relies on these guarantees of the Vulkan spec:
 
-- Presentation is read-only, and a re-acquired image holds what was drawn into it. This needs `clipped = VK_FALSE`,
-  `oldLayout = PRESENT_SRC_KHR` and `LOAD_OP_LOAD`. New images start `UNDEFINED`, and the trackers treat them as
-  holding nothing.
-- One scissored pass per repair rect. The render area is the bounds of the repair, and `LOAD_OP_DONT_CARE` is used when
-  the repair is whole.
-- `VkPresentRegionsKHR` carries the frame damage. Zero rects mean everything changed, so a frame where nothing changed
-  sends one empty rect instead.
-- One present semaphore per swapchain image, as the Vulkan guide asks.
+- Presenting is read-only, so a re-acquired image still holds what was drawn into it. This requires
+  `clipped = VK_FALSE`, `oldLayout = PRESENT_SRC_KHR` and `LOAD_OP_LOAD`. New images start out `UNDEFINED`, and the
+  trackers treat them as empty.
+- Each repair rect is drawn in its own scissored pass. The render area is the bounding box of the repair, and
+  `LOAD_OP_DONT_CARE` is used when everything is redrawn.
+- `VkPresentRegionsKHR` carries the frame damage. Zero rects would mean that everything changed, so a frame without
+  changes passes one empty rect.
+- There is one present semaphore per swapchain image, as the Vulkan guide recommends.
 
 Useful options:
 
-- `--verify` renders a whole reference frame on the GPU each frame and compares both images, read back.
+- `--verify` draws a reference frame from scratch on the GPU every frame, reads both images back and compares them.
 - `--flash` tints what was redrawn.
 - `--resize N` recreates everything every N frames.
-- `--present`, `--images`, `--order`, `--device`.
+- `--present`, `--images`, `--order` and `--device`.
 
-`meson test --suite vulkan` runs offscreen and headless verification with resizes for every tracker. The results:
+`meson test --suite vulkan` runs the offscreen and headless targets with resizes and verification for every tracker.
+Results:
 
 | Run | buffers | history | map |
 |---|---|---|---|
-| KWin window, RADV, 4 images, FIFO, 240 frames | 8.82%, 0 wrong | 8.82%, 0 wrong | 11.54%, 0 wrong |
-| Mesa headless WSI, 5 images, 300 frames | 12.81%, 10 whole | 18.38%, 35 whole | 15.69%, 10 whole |
+| KWin window, RADV, 4 images, FIFO, 240 frames | 8.82% redrawn, 0 wrong | 8.82% redrawn, 0 wrong | 11.54% redrawn, 0 wrong |
+| Mesa headless WSI, 5 images, 300 frames | 12.81%, 10 complete redraws | 18.38%, 35 complete redraws | 15.69%, 10 complete redraws |
 
-These were run with `VK_LAYER_KHRONOS_validation` on RADV and lavapipe, and it reported nothing.
+All of this ran under `VK_LAYER_KHRONOS_validation` on RADV and lavapipe without a single message.
 
 ### shm-damage
 
-A `wl_shm` client. It picks among the buffers the compositor released, the freshest by default (`--oldest` for the
-other order), and sends the frame damage with `wl_surface.damage_buffer`.
-- It draws on frame callbacks, after a configure, or after 100 ms without a frame callback, as Qt does. A window the
-  compositor doesn't show gets no callbacks.
-- `--copy` repairs the way Qt, Android and Gecko do:
-  1. Copy what the buffer lacks from the buffer presented last.
-  2. Draw only the frame damage.
+A `wl_shm` client. It picks one of the buffers that the compositor has released, by default the one presented most
+recently (`--oldest` picks the oldest), and sends the frame damage with `wl_surface.damage_buffer`.
 
-  On KWin with 3 buffers, it draws 3.6% of the pixels and copies 3.6%, instead of drawing 5.3%.
-- `--verify` compares every frame with one drawn whole.
+- It draws a new frame on a frame callback, after a configure event, or after 100 ms without a frame callback, like Qt
+  does. A window that the compositor doesn't show gets no frame callbacks.
+- `--copy` repairs buffers the way Qt, Android and Gecko do:
+  1. copy what the buffer missed from the last presented buffer,
+  2. redraw only the frame damage.
 
-## Ideas not done
+  On KWin with 3 buffers it redraws 3.6% of the pixels and copies 3.6%, instead of redrawing 5.3%.
+- `--verify` compares every frame with one drawn from scratch.
 
-- Resolution for every tracker. Cell size isn't specific to the map. It is one way to store damage, next to rects with
-  a budget, and either way works with any bookkeeping:
+## Ideas for later
 
-  | Kept | Rects (rect budget) | Raster (cell size) |
+- Resolution for every tracker. Cell size isn't specific to the map: storing damage in cells is an alternative to
+  storing a limited number of rects, and either works with any kind of bookkeeping:
+
+  | Keeps | Rects (limited count) | Cells (cell size) |
   |---|---|---|
-  | per buffer | `buffers` | a bitmap per buffer, 1 bit per cell, where union is OR |
+  | per buffer | `buffers` | a bitmap per buffer, 1 bit per cell, where adding damage is an OR |
   | per frame | `history` | a bitmap per frame |
-  | per place, latest frame | rects carrying the frame that last changed them, where a merge keeps the newer frame | `map` |
+  | per place, the latest frame | rects that carry the frame that last changed them; a merge keeps the newer frame | `map` |
 
-  The cheapest step is a cell size on regions that snaps rects as they are added. Snapping saves little memory, but
-  makes rects merge more often and keeps scissors aligned.
+  The cheapest first step would be a cell size for regions that snaps rects as they are added. Snapping saves little
+  memory, but rects merge more often and scissors stay aligned.
 
-- An exact banded region with a larger cap, for the damage sent to compositors, which take any number of rects.
-  wlroots caps at 20 and Gecko at 8.
-- `EGL_KHR_partial_update`: the repair is exactly what `eglSetDamageRegionKHR` wants. An EGL example would show
-  `history` with real ages.
-- A history whose old frames merge into coarser buckets, to reach further back with fixed memory.
-- Refining damage by hashing tiles, as wayvnc does and Mali's transaction elimination does in hardware, for producers
-  that can't tell what changed.
+- An exact region with a larger rect limit for the damage sent to compositors, since they accept any number of rects.
+  wlroots limits it to 20 rects and Gecko to 8.
+- `EGL_KHR_partial_update`: the repair is exactly what `eglSetDamageRegionKHR` expects. An EGL example would show
+  `history` with real buffer ages.
+- A history that merges old frames into coarser buckets, so it can look further back with fixed memory.
+- Refining damage by hashing cells, like wayvnc does in software and Mali's transaction elimination does in hardware,
+  for producers that can't tell what changed.
