@@ -1,0 +1,3 @@
+option('tests', type: 'boolean', value: false, description: 'Build tests')
+option('tools', type: 'boolean', value: false, description: 'Build damage-sim and damage-bench')
+option('examples', type: 'boolean', value: false, description: 'Build examples')

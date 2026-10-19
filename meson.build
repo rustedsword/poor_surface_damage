@@ -50,9 +50,15 @@ root_inc = include_directories('.')
 inc = include_directories('include')
 
 subdir('src')
-subdir('harness')
-subdir('examples')
+
+if get_option('tests') or get_option('tools') or get_option('examples')
+	subdir('harness')
+endif
 
 if get_option('tests')
 	subdir('tests')
+endif
+
+if get_option('examples')
+	subdir('examples')
 endif

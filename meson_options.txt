@@ -1,8 +1,0 @@
-option('tests',
-  description: 'Compile the tests',
-  type: 'boolean',
-  value: true)
-option('examples',
-  description: 'Build the example applications',
-  type: 'feature',
-  value: 'auto')

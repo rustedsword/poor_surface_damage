@@ -1,13 +1,8 @@
-vulkan_dep = dependency('vulkan', required: get_option('examples'))
-wayland_client_dep = dependency('wayland-client', required: get_option('examples'))
-wayland_protocols_dep = dependency('wayland-protocols', required: get_option('examples'))
-wayland_scanner = find_program('wayland-scanner', required: get_option('examples'))
-glslc = find_program('glslc', required: get_option('examples'))
-
-if not (vulkan_dep.found() and wayland_client_dep.found() and wayland_protocols_dep.found() and
-	wayland_scanner.found() and glslc.found())
-	subdir_done()
-endif
+vulkan_dep = dependency('vulkan')
+wayland_client_dep = dependency('wayland-client')
+wayland_protocols_dep = dependency('wayland-protocols')
+wayland_scanner = find_program('wayland-scanner')
+glslc = find_program('glslc')
 
 xdg_shell_xml = wayland_protocols_dep.get_variable('pkgdatadir') / 'stable/xdg-shell/xdg-shell.xml'
 xdg_shell = [

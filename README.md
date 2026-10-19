@@ -40,7 +40,7 @@ platforms track damage.
 Building needs a C23 compiler, Meson 1.4 and [poor_base](https://github.com/rustedsword/poor_base), either installed
 or from the submodule. The examples also need Vulkan, wayland-client, wayland-protocols and glslc.
 
-    $ meson setup build/
+    $ meson setup build/ -Dtests=true -Dtools=true -Dexamples=true
     $ ninja -C build/
     $ meson test -C build/                              # add --no-suite vulkan if you have no Vulkan device
     $ build/harness/damage-sim --rects 8                # compares the trackers

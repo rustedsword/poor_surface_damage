@@ -232,9 +232,8 @@ in both and pass the outputs to `harness/compare-bench.py`.
 
 ## Examples
 
-Both examples are built if Vulkan, wayland-client, wayland-protocols, wayland-scanner and glslc are found
-(`-Dexamples=auto`). Both accept the harness options `--tracker`, `--rects`, `--history`, `--cells` and
-`--cell-size`.
+The examples are built with `-Dexamples=true` and need Vulkan, wayland-client, wayland-protocols, wayland-scanner and
+glslc. Both accept the harness options `--tracker`, `--rects`, `--history`, `--cells` and `--cell-size`.
 
 ### vk-damage
 
