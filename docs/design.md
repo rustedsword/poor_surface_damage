@@ -118,15 +118,15 @@ Metal and Qt's raster backing stores. It needs the identity of the buffer: a Vul
 bo.
 
 ```c
-swapchain_damage lacks;
+swapchain_damage tracker;
 damage_region damage = POOR_DAMAGE_REGION_INIT, repair;
 
-poor_damage_buffers_init(&lacks, width, height);
+poor_damage_buffers_init(&tracker, width, height);
 ...
-poor_damage_buffers_lacks(&lacks, index, &repair);
+poor_damage_buffers_lacks(&tracker, index, &repair);
 poor_damage_region_add_region(&repair, &damage);
 /* redraw repair */
-poor_damage_buffers_drawn(&lacks, index, &damage);
+poor_damage_buffers_drawn(&tracker, index, &damage);
 ```
 
 `poor_damage_buffers_forget()` marks a single buffer that was recreated.

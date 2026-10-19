@@ -12,38 +12,60 @@ extern "C" {
 /*
  * Poor Damage Buffers.
  *
- * What each of 'buffers' buffers lacks of the frames that were drawn since its own, in up to 'capacity' rects. A frame
- * that goes to a buffer redraws that and its own damage. Buffers come back in any order and after any number of
- * frames, as long as each is known by an index, like a Vulkan image index or the slot of a wl_buffer:
+ * Keeps track of the damage that each buffer of a swapchain is missing.
  *
+ * When a frame is drawn into one buffer, all other buffers fall behind by the damage of that frame. Before drawing
+ * into a buffer again, you have to redraw everything it missed in addition to the damage of the new frame. The damage
+ * is tracked separately for each buffer, so buffers can be reused in any order and after any number of frames. Each
+ * buffer is identified by an index, e.g. a Vulkan swapchain image index or the slot of a wl_buffer in your pool.
+ *
+ * Example with 3 buffers that keep up to 4 rects each:
+ *
+ *   poor_damage_region_declare(damage_region, 4);
  *   poor_damage_buffers_declare(swapchain_damage, 3, 4);
  *
- *   swapchain_damage lacks;
+ *   swapchain_damage tracker;
+ *   damage_region damage, repair;
  *
- *   poor_damage_buffers_init(&lacks, width, height);
- *   ...
- *   poor_damage_buffers_lacks(&lacks, index, &repair);
+ *   poor_damage_buffers_init(&tracker, width, height);
+ *
+ *   // Then, for each frame:
+ *
+ *   // fill 'repair' with all damage accumulated while other buffers were rendered
+ *   poor_damage_buffers_lacks(&tracker, index, &repair);
+ *
+ *   // add the damage of this frame to 'repair'
  *   poor_damage_region_add_region(&repair, &damage);
- *   ... redraw 'repair' into buffer 'index' ...
- *   poor_damage_buffers_drawn(&lacks, index, &damage);
  *
- * Memory, and the time that drawn() takes, grow with buffers and rects.
+ *   ... redraw 'repair' into buffer 'index', then present it with 'damage' ...
+ *
+ *   // damage the other buffers and clean buffer 'index'
+ *   poor_damage_buffers_drawn(&tracker, index, &damage);
+ *
+ * Memory usage and the time spent in poor_damage_buffers_drawn() grow with the number of buffers and rects.
  */
+
+/* Declare a tracker type 'name' for 'buffers' buffers that keep up to 'capacity' rects of damage each. */
 #define poor_damage_buffers_declare(name, buffers, capacity) h_damage_buffers_declare(name, buffers, capacity)
 
-/* Buffers of 'width' x 'height' that hold nothing yet */
+/*
+ * Initialize the tracker for a 'width' x 'height' surface. All buffers start out empty, so the first frame drawn into
+ * each of them has to redraw everything.
+ */
 #define poor_damage_buffers_init(buffers, width, height) \
 	poor_damage_buffers_init_impl(h_damage_buffers(buffers), width, height)
 
-/* Buffer 'index' holds nothing anymore */
+/* Mark buffer 'index' as empty, e.g. after it was recreated. The next frame drawn into it redraws everything. */
 #define poor_damage_buffers_forget(buffers, index) poor_damage_buffers_forget_impl(h_damage_buffers(buffers), index)
 
-/* Sets 'region' to what buffer 'index' lacks */
+/* Set 'region' to the damage that buffer 'index' has missed since it was last drawn into. */
 #define poor_damage_buffers_lacks(buffers, index, region) \
 	poor_damage_buffers_lacks_impl(h_damage_buffers(buffers), index, h_damage_region(region))
 
-/* A frame with 'damage' was drawn into buffer 'index': the others lack it too, and that one lacks nothing. Returns the
- * number of the frame. */
+/*
+ * Call this after a frame with 'damage' was drawn into buffer 'index'. That buffer is now up to date, and all other
+ * buffers are missing 'damage' as well. Returns the number of the frame.
+ */
 #define poor_damage_buffers_drawn(buffers, index, ...) \
 	poor_damage_buffers_drawn_impl(h_damage_buffers(buffers), index, h_damage_rects((__VA_ARGS__)))
 

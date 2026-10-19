@@ -13,16 +13,16 @@ Every type is declared with the capacities that the application needs, and lives
 poor_damage_region_declare(damage_region, 4);           /* up to 4 rects */
 poor_damage_buffers_declare(swapchain_damage, 3, 4);    /* 3 buffers of up to 4 rects */
 
-swapchain_damage lacks;
+swapchain_damage tracker;
 damage_region damage = POOR_DAMAGE_REGION_INIT, repair;
 
-poor_damage_buffers_init(&lacks, width, height);
+poor_damage_buffers_init(&tracker, width, height);
 ...
 poor_damage_region_add(&damage, (struct poor_damage_rect){ x, y, w, h });
-poor_damage_buffers_lacks(&lacks, index, &repair);
+poor_damage_buffers_lacks(&tracker, index, &repair);
 poor_damage_region_add_region(&repair, &damage);
 /* redraw 'repair' into buffer 'index', present it with 'damage' */
-poor_damage_buffers_drawn(&lacks, index, &damage);
+poor_damage_buffers_drawn(&tracker, index, &damage);
 ```
 
 [docs/design.md](docs/design.md) explains the trackers and how to size them, the harness that checks them pixel by
